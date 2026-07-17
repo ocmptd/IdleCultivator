@@ -18,7 +18,7 @@ public class PortraitService {
     /** 中文姿容描述正文(不含展示用前缀)。 */
     public String appearancePrompt(Player p) {
         StringBuilder sb = new StringBuilder();
-        sb.append(p.gender() == Gender.FEMALE ? "女青丝如瀑" : "男黑发束起");
+        sb.append(p.gender() == Gender.FEMALE ? "女,青丝如瀑" : "男,黑发束起");
         sb.append(",").append(switch (p.realm()) {
             case LIAN_QI -> "身着麻衣布鞋";
             case ZHU_JI -> "身着道袍长衫";
