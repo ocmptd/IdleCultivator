@@ -6,6 +6,7 @@ import com.ocmptd.idlecultivator.game.player.Player;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
 import com.ocmptd.idlecultivator.storage.CultivationTaskRepository;
 import com.ocmptd.idlecultivator.storage.NoticeRepository;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +44,7 @@ public class CultivationService {
     private final CultivationTaskRepository taskRepository;
     private final PlayerService playerService;
     private final NoticeRepository noticeRepository;
+    @Setter
     private volatile Notifier notifier = (t, msg) -> {
         log.info("[推送] {}: {}", t.userId(), msg);
         return false;
@@ -53,10 +55,6 @@ public class CultivationService {
         this.taskRepository = taskRepository;
         this.playerService = playerService;
         this.noticeRepository = noticeRepository;
-    }
-
-    public void setNotifier(Notifier notifier) {
-        this.notifier = notifier;
     }
 
     public Optional<CultivationTask> activeTask(String userId) {
