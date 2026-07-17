@@ -32,6 +32,8 @@ public class Database implements AutoCloseable {
                         cultivation_direction TEXT,
                         active_streak INTEGER NOT NULL DEFAULT 0,
                         name_changed_at INTEGER NOT NULL DEFAULT 0,
+                        char_level INTEGER NOT NULL DEFAULT 0,
+                        season INTEGER NOT NULL DEFAULT 1,
                         created_at INTEGER NOT NULL
                     )""");
             migrate(st);
@@ -60,8 +62,14 @@ public class Database implements AutoCloseable {
 
     /** 对已存在的旧库补充新列。 */
     private void migrate(Statement st) {
+        addColumnIfMissing(st, "name_changed_at INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(st, "char_level INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing(st, "season INTEGER NOT NULL DEFAULT 1");
+    }
+
+    private void addColumnIfMissing(Statement st, String columnDef) {
         try {
-            st.executeUpdate("ALTER TABLE users ADD COLUMN name_changed_at INTEGER NOT NULL DEFAULT 0");
+            st.executeUpdate("ALTER TABLE users ADD COLUMN " + columnDef);
         } catch (SQLException ignored) {
             // 列已存在
         }

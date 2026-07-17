@@ -9,6 +9,8 @@ public class Player {
     private String name;
     private Gender gender;
     private Realm realm = Realm.LIAN_QI;
+    private int level = 1;
+    private int season = 1;
     private long exp;
     private long spiritStones;
     private String equipment = "";
@@ -56,6 +58,22 @@ public class Player {
 
     public void setRealm(Realm realm) {
         this.realm = realm;
+    }
+
+    public int level() {
+        return level;
+    }
+
+    public void setLevel(int level) {
+        this.level = level;
+    }
+
+    public int season() {
+        return season;
+    }
+
+    public void setSeason(int season) {
+        this.season = season;
     }
 
     public long exp() {
