@@ -1,5 +1,6 @@
 package com.ocmptd.idlecultivator.game.player;
 
+import com.ocmptd.idlecultivator.game.item.Inventory;
 import com.ocmptd.idlecultivator.storage.PlayerRepository;
 
 import java.util.Optional;
@@ -25,6 +26,7 @@ public class PlayerService {
         p.setGender(gender);
         p.setRealm(Realm.LIAN_QI);
         p.setEquipment("木剑×1");
+        p.setInventory(Inventory.add("", "筑基丹", 1));
         p.setCreatedAt(System.currentTimeMillis());
         repository.save(p);
         return p;
@@ -46,6 +48,7 @@ public class PlayerService {
         sb.append("\n灵石:").append(p.spiritStones());
         if (p.direction() != null) sb.append("\n方向:").append(p.direction().label());
         sb.append("\n装备:").append(p.equipment().isEmpty() ? "无" : p.equipment());
+        sb.append("\n背包:").append(Inventory.display(p.inventory()));
         return sb.toString();
     }
 }

@@ -38,9 +38,10 @@ public class CultivationTaskRepository {
         }
     }
 
-    public Optional<CultivationTask> findRunningByUser(String userId) {
+    /** 查找进行中(0)或待收获(3)的任务 */
+    public Optional<CultivationTask> findActiveByUser(String userId) {
         try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT * FROM cultivation_tasks WHERE user_id = ? AND status = 0 LIMIT 1")) {
+                "SELECT * FROM cultivation_tasks WHERE user_id = ? AND status IN (0, 3) LIMIT 1")) {
             ps.setString(1, userId);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? Optional.of(map(rs)) : Optional.empty();
