@@ -68,7 +68,7 @@ public class PlayerService {
      */
     public String describe(Player p) {
         StringBuilder sb = new StringBuilder();
-        sb.append("道友").append(p.name() == null ? p.userId() : p.name());
+        sb.append("道友[").append(p.name() == null ? p.userId() : p.name()).append("]");
         if (p.gender() != null) sb.append("(").append(p.gender().label()).append(")");
         sb.append("\n✨等级:Lv.").append(p.level()).append("(").append(p.realm().label()).append(")");
         if (p.level() >= LevelTable.MAX_LEVEL) {
