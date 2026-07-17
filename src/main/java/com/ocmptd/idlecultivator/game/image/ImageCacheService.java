@@ -16,7 +16,10 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * AI 图片缓存:以 prompt 对应缓存目录下的相对图片路径。
@@ -31,7 +34,33 @@ public class ImageCacheService {
     private final Path mapFile;
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
     private final Map<String, String> mappings = new ConcurrentHashMap<>();
+    private final ExecutorService executor = Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable, "image-cache-generator");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
     private volatile ImageGenerator generator;
+
+    public enum AsyncState {
+        HIT,
+        GENERATING,
+        DISABLED
+    }
+
+    public record AsyncLookup(AsyncState state, Path path) {
+        public static AsyncLookup hit(Path path) {
+            return new AsyncLookup(AsyncState.HIT, path);
+        }
+
+        public static AsyncLookup generating() {
+            return new AsyncLookup(AsyncState.GENERATING, null);
+        }
+
+        public static AsyncLookup disabled() {
+            return new AsyncLookup(AsyncState.DISABLED, null);
+        }
+    }
 
     @FunctionalInterface
     public interface ImageGenerator {
@@ -73,6 +102,25 @@ public class ImageCacheService {
         Path generatedPath = generated.get().toAbsolutePath().normalize();
         put(prompt, cacheDir.relativize(generatedPath).toString());
         return Optional.of(generatedPath);
+    }
+
+    public AsyncLookup lookupOrGenerateAsync(String prompt) {
+        Optional<Path> cached = lookup(prompt);
+        if (cached.isPresent()) return AsyncLookup.hit(cached.get());
+
+        if (generator == null) return AsyncLookup.disabled();
+        if (inFlight.add(prompt)) {
+            executor.submit(() -> {
+                try {
+                    getOrGenerate(prompt);
+                } catch (RuntimeException e) {
+                    log.warn("异步生成图片失败", e);
+                } finally {
+                    inFlight.remove(prompt);
+                }
+            });
+        }
+        return AsyncLookup.generating();
     }
 
     private void load() {

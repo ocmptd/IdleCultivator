@@ -16,6 +16,7 @@ import com.ocmptd.idlecultivator.config.BotConfig;
 import com.ocmptd.idlecultivator.game.breakthrough.BreakthroughService;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
 import com.ocmptd.idlecultivator.game.image.ImageCacheService;
+import com.ocmptd.idlecultivator.game.image.RightCodesImageGenerator;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
 import com.ocmptd.idlecultivator.game.portrait.PortraitService;
 import com.ocmptd.idlecultivator.scheduler.GameScheduler;
@@ -47,6 +48,9 @@ public class Application {
         BreakthroughService breakthroughService = new BreakthroughService(playerService);
         PortraitService portraitService = new PortraitService();
         ImageCacheService imageCacheService = new ImageCacheService(Path.of(config.imageCacheDir()));
+        if (!config.imageApiKey().isEmpty()) {
+            imageCacheService.setGenerator(new RightCodesImageGenerator(config, Path.of(config.imageCacheDir())));
+        }
 
         CommandRouter router = new CommandRouter(config.commandPrefix());
         router.register(new HelpCommand(router));
