@@ -50,6 +50,13 @@ public class Database implements AutoCloseable {
                         overflow_penalty REAL NOT NULL DEFAULT 0
                     )""");
             st.executeUpdate("""
+                    CREATE TABLE IF NOT EXISTS pending_notices (
+                        notice_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT NOT NULL,
+                        message TEXT NOT NULL,
+                        created_at INTEGER NOT NULL
+                    )""");
+            st.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS group_status (
                         group_id TEXT PRIMARY KEY,
                         last_active_time INTEGER,

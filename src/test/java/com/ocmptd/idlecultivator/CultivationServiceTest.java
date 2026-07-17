@@ -9,6 +9,7 @@ import com.ocmptd.idlecultivator.game.player.Player;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
 import com.ocmptd.idlecultivator.storage.CultivationTaskRepository;
 import com.ocmptd.idlecultivator.storage.Database;
+import com.ocmptd.idlecultivator.storage.NoticeRepository;
 import com.ocmptd.idlecultivator.storage.PlayerRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +26,7 @@ class CultivationServiceTest {
     private Database db;
     private PlayerService playerService;
     private CultivationTaskRepository taskRepository;
+    private NoticeRepository noticeRepository;
     private CultivationService service;
 
     @BeforeEach
@@ -32,7 +34,8 @@ class CultivationServiceTest {
         db = new Database(":memory:");
         playerService = new PlayerService(new PlayerRepository(db));
         taskRepository = new CultivationTaskRepository(db);
-        service = new CultivationService(taskRepository, playerService);
+        noticeRepository = new NoticeRepository(db);
+        service = new CultivationService(taskRepository, playerService, noticeRepository);
     }
 
     @AfterEach
@@ -150,6 +153,24 @@ class CultivationServiceTest {
         assertEquals(4, playerService.find("u1").orElseThrow().level());
         assertEquals(40, playerService.find("u1").orElseThrow().exp());
         assertTrue(service.activeTask("u1").isEmpty());
+
+        // 推送失败时结算信息暂存,下次发消息时先送达;取出后即清空
+        var notices = noticeRepository.drain("u1");
+        assertEquals(1, notices.size());
+        assertTrue(notices.get(0).contains("+400 修为"), notices.get(0));
+        assertTrue(noticeRepository.drain("u1").isEmpty());
+    }
+
+    @Test
+    void quickPushFailureStoresPendingNotice() throws Exception {
+        Player p = newPlayer();
+        service.start(p, null, 20); // 默认 notifier 返回 false
+        backdateTask(activeTaskId(), 21 * 60_000L);
+
+        service.settleFinishedTasks();
+        var notices = noticeRepository.drain("u1");
+        assertEquals(1, notices.size());
+        assertTrue(notices.get(0).contains("修炼完成"), notices.get(0));
     }
 
     @Test

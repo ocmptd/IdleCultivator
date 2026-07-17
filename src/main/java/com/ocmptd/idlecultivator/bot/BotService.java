@@ -4,6 +4,7 @@ import com.ocmptd.idlecultivator.command.CommandRouter;
 import com.ocmptd.idlecultivator.config.BotConfig;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationTask;
+import com.ocmptd.idlecultivator.storage.NoticeRepository;
 import io.github.kloping.qqbot.Starter;
 import io.github.kloping.qqbot.api.Intents;
 import io.github.kloping.qqbot.api.SendAble;
@@ -33,14 +34,17 @@ public class BotService {
     private final BotConfig config;
     private final CommandRouter router;
     private final CultivationService cultivationService;
+    private final NoticeRepository noticeRepository;
     /** 群 openid → 最近一次消息的 Group,用于修炼结算主动推送 */
     private final Map<String, Group> knownGroups = new ConcurrentHashMap<>();
     private Starter starter;
 
-    public BotService(BotConfig config, CommandRouter router, CultivationService cultivationService) {
+    public BotService(BotConfig config, CommandRouter router, CultivationService cultivationService,
+                      NoticeRepository noticeRepository) {
         this.config = config;
         this.router = router;
         this.cultivationService = cultivationService;
+        this.noticeRepository = noticeRepository;
     }
 
     public void start() {
@@ -55,6 +59,7 @@ public class BotService {
                 if (config.requireAt() && !containsAt(event.getMessage())) return;
                 String content = extractText(event.getMessage());
                 String reply = router.handle(event.getSender().getOpenid(), event.getSubject().getOpenid(), content);
+                reply = withPendingNotices(event.getSender().getOpenid(), reply);
                 log.debug("群消息 content={} reply={}", content, reply != null);
                 if (reply != null) event.sendMessage(reply);
             }
@@ -63,12 +68,24 @@ public class BotService {
             public void onFriendMessage(FriendMessageEvent event) {
                 String content = extractText(event.getMessage());
                 String reply = router.handle(event.getSender().getOpenid(), null, content);
+                reply = withPendingNotices(event.getSender().getOpenid(), reply);
                 if (reply != null) event.sendMessage(reply);
             }
         });
         cultivationService.setNotifier(this::pushCultivationMessage);
         log.info("QQ 机器人已启动 (appid={}, 指令前缀=\"{}\", 仅@触发={})",
                 config.appId(), router.prefix(), config.requireAt());
+    }
+
+    /**
+     * 把玩家的待送达结算消息(主动推送失败时暂存)拼到本次回复前面,
+     * 利用 QQ 被动消息 5 分钟时效:玩家一发消息就先补发之前的结算信息。
+     */
+    private String withPendingNotices(String userId, String reply) {
+        var notices = noticeRepository.drain(userId);
+        if (notices.isEmpty()) return reply;
+        String pending = "【修炼结算】" + String.join("\n【修炼结算】", notices);
+        return reply == null ? pending : pending + "\n" + reply;
     }
 
     /** 修炼结算/到期提醒推送到任务所在群,返回是否推送成功(失败时由修炼系统自动结算)。 */

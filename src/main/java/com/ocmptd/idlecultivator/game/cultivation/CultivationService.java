@@ -5,6 +5,7 @@ import com.ocmptd.idlecultivator.game.player.LevelTable;
 import com.ocmptd.idlecultivator.game.player.Player;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
 import com.ocmptd.idlecultivator.storage.CultivationTaskRepository;
+import com.ocmptd.idlecultivator.storage.NoticeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,14 +42,17 @@ public class CultivationService {
 
     private final CultivationTaskRepository taskRepository;
     private final PlayerService playerService;
+    private final NoticeRepository noticeRepository;
     private volatile Notifier notifier = (t, msg) -> {
         log.info("[推送] {}: {}", t.userId(), msg);
         return false;
     };
 
-    public CultivationService(CultivationTaskRepository taskRepository, PlayerService playerService) {
+    public CultivationService(CultivationTaskRepository taskRepository, PlayerService playerService,
+                              NoticeRepository noticeRepository) {
         this.taskRepository = taskRepository;
         this.playerService = playerService;
+        this.noticeRepository = noticeRepository;
     }
 
     public void setNotifier(Notifier notifier) {
@@ -147,8 +151,11 @@ public class CultivationService {
         player.addSpiritStones(stones);
         String levelTip = playerService.gainExp(player, task.expectedReward());
         taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
-        notifier.push(task, "道友修炼完成!获得 +" + task.expectedReward() + " 修为,+" + stones
-                + " 灵石," + progressOf(player) + levelTip);
+        String message = "道友修炼完成!获得 +" + task.expectedReward() + " 修为,+" + stones
+                + " 灵石," + progressOf(player) + levelTip;
+        if (!notifier.push(task, message)) {
+            noticeRepository.add(task.userId(), message);
+        }
     }
 
     /** 无法推送提醒时,长时修炼到期直接自动结算全额收益,避免玩家被溢出惩罚。 */
@@ -159,11 +166,14 @@ public class CultivationService {
             return;
         }
         Player player = opt.get();
-        player.addSpiritStones(stonesOf(task.expectedReward()));
-        playerService.gainExp(player, task.expectedReward());
+        long stones = stonesOf(task.expectedReward());
+        player.addSpiritStones(stones);
+        String levelTip = playerService.gainExp(player, task.expectedReward());
         taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
+        noticeRepository.add(task.userId(), "道友上次修炼已自动结算:+" + task.expectedReward()
+                + " 修为,+" + stones + " 灵石," + progressOf(player) + levelTip);
         log.info("推送不可用,长时修炼自动结算:user={} +{} 修为 +{} 灵石",
-                task.userId(), task.expectedReward(), stonesOf(task.expectedReward()));
+                task.userId(), task.expectedReward(), stones);
     }
 
     /**

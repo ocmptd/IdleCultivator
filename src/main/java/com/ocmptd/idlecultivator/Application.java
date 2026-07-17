@@ -20,6 +20,7 @@ import com.ocmptd.idlecultivator.game.portrait.PortraitService;
 import com.ocmptd.idlecultivator.scheduler.GameScheduler;
 import com.ocmptd.idlecultivator.storage.CultivationTaskRepository;
 import com.ocmptd.idlecultivator.storage.Database;
+import com.ocmptd.idlecultivator.storage.NoticeRepository;
 import com.ocmptd.idlecultivator.storage.PlayerRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,8 +40,9 @@ public class Application {
 
         Database db = new Database(config.dbPath());
         PlayerService playerService = new PlayerService(new PlayerRepository(db));
+        NoticeRepository noticeRepository = new NoticeRepository(db);
         CultivationService cultivationService =
-                new CultivationService(new CultivationTaskRepository(db), playerService);
+                new CultivationService(new CultivationTaskRepository(db), playerService, noticeRepository);
         BreakthroughService breakthroughService = new BreakthroughService(playerService);
         PortraitService portraitService = new PortraitService();
 
@@ -60,7 +62,7 @@ public class Application {
         scheduler.start();
 
         if (config.hasCredentials()) {
-            new BotService(config, router, cultivationService).start();
+            new BotService(config, router, cultivationService, noticeRepository).start();
         } else {
             log.warn("未配置 bot.appid / bot.token,进入本地控制台模式(复制 config.properties.example 为 config.properties 可接入 QQ)");
             cultivationService.setNotifier((task, msg) -> {
