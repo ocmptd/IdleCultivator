@@ -1,6 +1,7 @@
 package com.ocmptd.idlecultivator.game.cultivation;
 
 import com.ocmptd.idlecultivator.game.item.Inventory;
+import com.ocmptd.idlecultivator.game.player.LevelTable;
 import com.ocmptd.idlecultivator.game.player.Player;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
 import com.ocmptd.idlecultivator.storage.CultivationTaskRepository;
@@ -84,7 +85,7 @@ public class CultivationService {
         }
         if (minutes <= 0) minutes = randomDefaultMinutes();
         if (minutes > 24 * 60) return "单次修炼时长不可超过 24 小时。";
-        long reward = expectedReward(minutes, method);
+        long reward = expectedReward(minutes, method, player.level());
         taskRepository.insert(player.userId(), player.groupId(), method.label(), System.currentTimeMillis(), minutes, reward);
         String tail = isQuick(minutes) ? ",完成后自动收获" : ",完成后请及时收获,超时将有溢出惩罚";
         return "道友开始修炼《" + method.label() + "》,预计 " + formatDuration(minutes) + " 后完成,将获得 +" + reward + " 修为" + tail;
@@ -95,7 +96,12 @@ public class CultivationService {
     }
 
     public long expectedReward(int minutes, CultivationMethod method) {
-        double multiplier = method == null ? 1.0 : method.multiplier();
+        return expectedReward(minutes, method, 1);
+    }
+
+    /** 预期收益 = 基础 × 功法倍率 × 境界压制(元婴期 ×0.8)。 */
+    public long expectedReward(int minutes, CultivationMethod method, int level) {
+        double multiplier = (method == null ? 1.0 : method.multiplier()) * LevelTable.cultivationMultiplier(level);
         if (isQuick(minutes)) return Math.round(QUICK_EXP * multiplier);
         return Math.round(minutes / 60.0 * BASE_EXP_PER_HOUR * multiplier);
     }
@@ -131,12 +137,11 @@ public class CultivationService {
             return;
         }
         Player player = opt.get();
-        player.addExp(task.expectedReward());
         player.addSpiritStones(QUICK_STONES);
-        playerService.save(player);
+        String levelTip = playerService.gainExp(player, task.expectedReward());
         taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
         notifier.push(task, "道友修炼完成!获得 +" + task.expectedReward() + " 修为,+" + QUICK_STONES
-                + " 灵石,当前修为:" + player.exp() + "/" + player.realm().expToNext());
+                + " 灵石," + progressOf(player) + levelTip);
     }
 
     /** 无法推送提醒时,长时修炼到期直接自动结算全额收益,避免玩家被溢出惩罚。 */
@@ -147,8 +152,7 @@ public class CultivationService {
             return;
         }
         Player player = opt.get();
-        player.addExp(task.expectedReward());
-        playerService.save(player);
+        playerService.gainExp(player, task.expectedReward());
         taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
         log.info("推送不可用,长时修炼自动结算:user={} +{} 修为", task.userId(), task.expectedReward());
     }
@@ -169,28 +173,28 @@ public class CultivationService {
             }
             double progress = (double) (now - task.startTime()) / (task.endTime() - task.startTime());
             long gain = Math.round(task.expectedReward() * progress * (0.5 + 0.5 * progress));
-            player.addExp(gain);
-            playerService.save(player);
+            String levelTip = playerService.gainExp(player, gain);
             taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
             return "道友提前结束修炼(进度 " + Math.round(progress * 100) + "%),获得 +" + gain
-                    + " 修为(提前收获有衰减)\n当前修为:" + player.exp() + "/" + player.realm().expToNext();
+                    + " 修为(提前收获有衰减)\n当前" + progressOf(player) + levelTip;
         }
         if (isQuick(task.durationMinutes())) {
             settleQuick(task);
-            return "道友修炼完成!收益已自动结算,当前修为:" + playerService.find(player.userId()).map(Player::exp).orElse(0L)
-                    + "/" + player.realm().expToNext();
+            return "道友修炼完成!收益已自动结算,当前"
+                    + playerService.find(player.userId()).map(CultivationService::progressOf).orElse("");
         }
 
         long overtimeMinutes = (now - task.endTime()) / 60_000;
         long baseExp = task.expectedReward();
         StringBuilder msg = new StringBuilder();
+        String levelTip;
         if (overtimeMinutes < 1) {
-            player.addExp(baseExp);
+            levelTip = playerService.gainExp(player, baseExp);
             msg.append("道友修炼完成!获得 +").append(baseExp).append(" 修为");
         } else {
             long overflowExp = Math.min(baseExp, Math.round(overtimeMinutes / 60.0 * BASE_EXP_PER_HOUR));
             long gainExp = baseExp - overflowExp;
-            player.addExp(gainExp);
+            levelTip = playerService.gainExp(player, gainExp);
             msg.append("道友修炼完成!获得 +").append(gainExp).append(" 修为(超时 ")
                     .append(formatDuration((int) overtimeMinutes)).append(",溢出部分已转化:");
             if (overtimeMinutes <= 60) {
@@ -214,8 +218,18 @@ public class CultivationService {
         }
         playerService.save(player);
         taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
-        msg.append("\n当前修为:").append(player.exp()).append("/").append(player.realm().expToNext());
+        msg.append("\n当前").append(progressOf(player)).append(levelTip);
         return msg.toString();
+    }
+
+    /** 当前等级与修为进度描述。 */
+    public static String progressOf(Player player) {
+        if (player.level() >= LevelTable.MAX_LEVEL) {
+            return "Lv." + player.level() + ",修为:" + player.exp() + "(已满级)";
+        }
+        String suffix = LevelTable.atBreakthrough(player.level()) ? "(需突破)" : "";
+        return "Lv." + player.level() + ",修为:" + player.exp() + "/"
+                + LevelTable.expToNextLevel(player.level()) + suffix;
     }
 
     public static String formatDuration(int minutes) {

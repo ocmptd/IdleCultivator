@@ -97,7 +97,9 @@ class CultivationServiceTest {
 
         String result = service.harvest(playerService.find("u1").orElseThrow());
         assertTrue(result.contains("+250 修为"), result);
-        assertEquals(250, playerService.find("u1").orElseThrow().exp());
+        // 250 修为自动升级:Lv.1→2 耗 110,Lv.2→3 耗 120,剩余 20
+        assertEquals(3, playerService.find("u1").orElseThrow().level());
+        assertEquals(20, playerService.find("u1").orElseThrow().exp());
         assertTrue(service.activeTask("u1").isEmpty());
     }
 
@@ -144,7 +146,8 @@ class CultivationServiceTest {
         backdateTask(activeTaskId(), 241 * 60_000L);
 
         service.settleFinishedTasks();
-        assertEquals(250, playerService.find("u1").orElseThrow().exp());
+        assertEquals(3, playerService.find("u1").orElseThrow().level());
+        assertEquals(20, playerService.find("u1").orElseThrow().exp());
         assertTrue(service.activeTask("u1").isEmpty());
     }
 
