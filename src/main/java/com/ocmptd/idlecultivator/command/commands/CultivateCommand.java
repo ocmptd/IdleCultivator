@@ -29,7 +29,7 @@ public class CultivateCommand implements Command {
 
     @Override
     public String usage() {
-        return "修炼 [功法名] [时长] —— 开始自动修炼,默认 18~28 分钟随机(如:修炼 紫府诀 4h)";
+        return "修炼 [功法名] [时长] —— 开始自动修炼,默认 18~28 分钟随机,最长 2 小时,时长越长收益越高(如:修炼 紫府诀 2h)";
     }
 
     @Override

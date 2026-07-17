@@ -13,9 +13,11 @@ import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 双轨制修炼系统:
- * - 快速修炼(≤30 分钟):固定 +100 修为 +50 灵石,到期自动结算并推送,默认时长 18~28 分钟随机
- * - 长时修炼(30 分钟 ~ 24 小时):时长 × 基础收益 × 功法倍率,到期后需收获(推送失败时自动结算);
+ * 修炼系统(最长 2 小时,时长越长修为/灵石越多且每小时效率越高):
+ * - 修为 = 分钟数 × (1 + 分钟数/120) × (100/60) × 功法倍率 × 境界压制;灵石 = 修为÷2
+ *   (约 30m→62 / 1h→150 / 2h→400;日均约 5 次 2h 修炼 ≈ 2000 修为,契合等级节奏设计)
+ * - 快速修炼(≤30 分钟):到期自动结算并推送,默认时长 18~28 分钟随机
+ * - 长时修炼(30 分钟 ~ 2 小时):到期后需收获(推送失败时自动结算);
  *   超时溢出部分按分级惩罚转化:≤1h → 灵尘(×0.3);1-3h → 残破法宝(×0.5);>3h → 灵石(×0.7)且 20% 概率走火入魔
  * - 提前收获:修炼满 10 分钟后可提前结束,收益 = 预期 × 进度 × (0.5 + 0.5×进度),越接近完成衰减越小
  */
@@ -29,11 +31,10 @@ public class CultivationService {
     }
 
     public static final int DEFAULT_MINUTES = 30;
+    public static final int MAX_MINUTES = 120;
     public static final int MIN_HARVEST_MINUTES = 10;
-    public static final long QUICK_EXP = 100;
-    public static final long QUICK_STONES = 50;
-    /** 长时修炼每小时基础修为(4h ≈ 250) */
-    public static final double BASE_EXP_PER_HOUR = 62.5;
+    /** 每小时基础修为(另有时长加成:×(1 + 分钟数/120)) */
+    public static final double BASE_EXP_PER_HOUR = 100;
     public static final String ITEM_DUST = "灵尘";
     public static final String ITEM_BROKEN_ARTIFACT = "残破法宝";
     public static final double MADNESS_PROBABILITY = 0.2;
@@ -84,11 +85,12 @@ public class CultivationService {
             return "《" + method.label() + "》需" + method.requiredRealm().label() + "及以上方可修炼。";
         }
         if (minutes <= 0) minutes = randomDefaultMinutes();
-        if (minutes > 24 * 60) return "单次修炼时长不可超过 24 小时。";
+        if (minutes > MAX_MINUTES) return "单次修炼时长最长 2 小时(时长越长收益越高)。";
         long reward = expectedReward(minutes, method, player.level());
         taskRepository.insert(player.userId(), player.groupId(), method.label(), System.currentTimeMillis(), minutes, reward);
         String tail = isQuick(minutes) ? ",完成后自动收获" : ",完成后请及时收获,超时将有溢出惩罚";
-        return "道友开始修炼《" + method.label() + "》,预计 " + formatDuration(minutes) + " 后完成,将获得 +" + reward + " 修为" + tail;
+        return "道友开始修炼《" + method.label() + "》,预计 " + formatDuration(minutes) + " 后完成,将获得 +" + reward
+                + " 修为,+" + stonesOf(reward) + " 灵石" + tail;
     }
 
     public static boolean isQuick(int minutes) {
@@ -99,11 +101,15 @@ public class CultivationService {
         return expectedReward(minutes, method, 1);
     }
 
-    /** 预期收益 = 基础 × 功法倍率 × 境界压制(元婴期 ×0.8)。 */
+    /** 预期修为 = 分钟数 × (1 + 分钟数/120) × 每分钟基础 × 功法倍率 × 境界压制(元婴期 ×0.8),时长越长效率越高。 */
     public long expectedReward(int minutes, CultivationMethod method, int level) {
         double multiplier = (method == null ? 1.0 : method.multiplier()) * LevelTable.cultivationMultiplier(level);
-        if (isQuick(minutes)) return Math.round(QUICK_EXP * multiplier);
-        return Math.round(minutes / 60.0 * BASE_EXP_PER_HOUR * multiplier);
+        return Math.round(minutes * (1 + minutes / 120.0) * (BASE_EXP_PER_HOUR / 60) * multiplier);
+    }
+
+    /** 灵石收益 = 修为收益 ÷ 2。 */
+    public static long stonesOf(long exp) {
+        return exp / 2;
     }
 
     /**
@@ -137,10 +143,11 @@ public class CultivationService {
             return;
         }
         Player player = opt.get();
-        player.addSpiritStones(QUICK_STONES);
+        long stones = stonesOf(task.expectedReward());
+        player.addSpiritStones(stones);
         String levelTip = playerService.gainExp(player, task.expectedReward());
         taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
-        notifier.push(task, "道友修炼完成!获得 +" + task.expectedReward() + " 修为,+" + QUICK_STONES
+        notifier.push(task, "道友修炼完成!获得 +" + task.expectedReward() + " 修为,+" + stones
                 + " 灵石," + progressOf(player) + levelTip);
     }
 
@@ -152,9 +159,11 @@ public class CultivationService {
             return;
         }
         Player player = opt.get();
+        player.addSpiritStones(stonesOf(task.expectedReward()));
         playerService.gainExp(player, task.expectedReward());
         taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
-        log.info("推送不可用,长时修炼自动结算:user={} +{} 修为", task.userId(), task.expectedReward());
+        log.info("推送不可用,长时修炼自动结算:user={} +{} 修为 +{} 灵石",
+                task.userId(), task.expectedReward(), stonesOf(task.expectedReward()));
     }
 
     /**
@@ -173,10 +182,11 @@ public class CultivationService {
             }
             double progress = (double) (now - task.startTime()) / (task.endTime() - task.startTime());
             long gain = Math.round(task.expectedReward() * progress * (0.5 + 0.5 * progress));
+            player.addSpiritStones(stonesOf(gain));
             String levelTip = playerService.gainExp(player, gain);
             taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
             return "道友提前结束修炼(进度 " + Math.round(progress * 100) + "%),获得 +" + gain
-                    + " 修为(提前收获有衰减)\n当前" + progressOf(player) + levelTip;
+                    + " 修为,+" + stonesOf(gain) + " 灵石(提前收获有衰减)\n当前" + progressOf(player) + levelTip;
         }
         if (isQuick(task.durationMinutes())) {
             settleQuick(task);
@@ -189,13 +199,15 @@ public class CultivationService {
         StringBuilder msg = new StringBuilder();
         String levelTip;
         if (overtimeMinutes < 1) {
+            player.addSpiritStones(stonesOf(baseExp));
             levelTip = playerService.gainExp(player, baseExp);
-            msg.append("道友修炼完成!获得 +").append(baseExp).append(" 修为");
+            msg.append("道友修炼完成!获得 +").append(baseExp).append(" 修为,+").append(stonesOf(baseExp)).append(" 灵石");
         } else {
             long overflowExp = Math.min(baseExp, Math.round(overtimeMinutes / 60.0 * BASE_EXP_PER_HOUR));
             long gainExp = baseExp - overflowExp;
+            player.addSpiritStones(stonesOf(gainExp));
             levelTip = playerService.gainExp(player, gainExp);
-            msg.append("道友修炼完成!获得 +").append(gainExp).append(" 修为(超时 ")
+            msg.append("道友修炼完成!获得 +").append(gainExp).append(" 修为,+").append(stonesOf(gainExp)).append(" 灵石(超时 ")
                     .append(formatDuration((int) overtimeMinutes)).append(",溢出部分已转化:");
             if (overtimeMinutes <= 60) {
                 int dust = (int) Math.max(1, Math.round(overflowExp * 0.3));
