@@ -3,6 +3,7 @@ package com.ocmptd.idlecultivator.command;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,6 +43,11 @@ public class CommandRouter {
      * 处理一条原始消息。非指令消息返回 null。
      */
     public String handle(String userId, String groupId, String rawMessage) {
+        CommandReply reply = handleWithReply(userId, groupId, rawMessage);
+        return reply == null ? null : reply.text();
+    }
+
+    public CommandReply handleWithReply(String userId, String groupId, String rawMessage) {
         if (rawMessage == null) return null;
         String text = rawMessage.trim();
         if (!prefix.isEmpty()) {
@@ -56,14 +62,17 @@ public class CommandRouter {
         if (command == null) {
             // 无前缀模式下,未匹配的普通聊天消息不回复,避免刷屏
             if (prefix.isEmpty()) return null;
-            return "未知指令:" + parts[0] + ",输入 " + prefix + "帮助 查看指令列表";
+            return new CommandReply(
+                    "未知指令:" + parts[0] + ",输入 " + prefix + "帮助 查看指令列表",
+                    new ArrayList<>());
         }
         List<String> args = Arrays.asList(parts).subList(1, parts.length);
+        CommandContext context = new CommandContext(userId, groupId, args, prefix);
         try {
-            return command.execute(new CommandContext(userId, groupId, args, prefix));
+            return new CommandReply(command.execute(context), context.images());
         } catch (Exception e) {
             log.error("执行指令 {} 失败", parts[0], e);
-            return "天机紊乱,指令执行失败,请稍后再试。";
+            return new CommandReply("天机紊乱,指令执行失败,请稍后再试。", new ArrayList<>());
         }
     }
 }

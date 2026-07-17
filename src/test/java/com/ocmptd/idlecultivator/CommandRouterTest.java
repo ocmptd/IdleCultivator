@@ -5,6 +5,8 @@ import com.ocmptd.idlecultivator.command.CommandContext;
 import com.ocmptd.idlecultivator.command.CommandRouter;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -69,5 +71,33 @@ class CommandRouterTest {
         assertEquals("a", router.handle("u", "g", "回声 a"));
         // 未匹配的普通聊天消息不回复
         assertNull(router.handle("u", "g", "随便聊聊"));
+    }
+
+    @Test
+    void commandReplyExposesAttachedImages() {
+        Path image = Path.of("image-cache/portrait.png");
+        CommandRouter router = new CommandRouter("!");
+        router.register(new Command() {
+            @Override
+            public String name() {
+                return "图片";
+            }
+
+            @Override
+            public String usage() {
+                return "!图片";
+            }
+
+            @Override
+            public String execute(CommandContext ctx) {
+                ctx.addImage(image);
+                return "图片已就绪";
+            }
+        });
+
+        var reply = router.handleWithReply("u", "g", "!图片");
+
+        assertEquals("图片已就绪", reply.text());
+        assertEquals(java.util.List.of(image), reply.images());
     }
 }
