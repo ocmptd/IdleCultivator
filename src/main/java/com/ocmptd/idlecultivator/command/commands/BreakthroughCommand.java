@@ -24,13 +24,13 @@ public class BreakthroughCommand implements Command {
 
     @Override
     public String usage() {
-        return "!突破 —— 修为足够时突破至下一境界";
+        return "突破 —— 修为足够时突破至下一境界";
     }
 
     @Override
     public String execute(CommandContext ctx) {
         Optional<Player> opt = playerService.find(ctx.userId());
-        if (opt.isEmpty()) return "道友尚未创建角色,请先 !创建角色";
+        if (opt.isEmpty()) return "道友尚未创建角色,请先 " + ctx.prefix() + "创建角色";
         return breakthroughService.attempt(opt.get());
     }
 }

@@ -9,13 +9,26 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 指令路由:解析 "!指令 参数..." 并分发到已注册的 {@link Command}。
- * 兼容全角感叹号 "!"。
+ * 指令路由:解析 "[前缀]指令 参数..." 并分发到已注册的 {@link Command}。
+ * 前缀可配置,可为空(无前缀直接输入指令名)。前缀为 "!" 时兼容全角 "！"。
  */
 public class CommandRouter {
     private static final Logger log = LoggerFactory.getLogger(CommandRouter.class);
 
     private final Map<String, Command> commands = new LinkedHashMap<>();
+    private final String prefix;
+
+    public CommandRouter() {
+        this("!");
+    }
+
+    public CommandRouter(String prefix) {
+        this.prefix = prefix == null ? "" : prefix.trim();
+    }
+
+    public String prefix() {
+        return prefix;
+    }
 
     public void register(Command command) {
         commands.put(command.name(), command);
@@ -31,18 +44,23 @@ public class CommandRouter {
     public String handle(String userId, String groupId, String rawMessage) {
         if (rawMessage == null) return null;
         String text = rawMessage.trim();
-        if (text.startsWith("！")) text = "!" + text.substring(1);
-        if (!text.startsWith("!")) return null;
+        if (!prefix.isEmpty()) {
+            if (prefix.equals("!") && text.startsWith("！")) text = "!" + text.substring(1);
+            if (!text.startsWith(prefix)) return null;
+            text = text.substring(prefix.length()).trim();
+        }
 
-        String[] parts = text.substring(1).trim().split("\\s+");
+        String[] parts = text.split("\\s+");
         if (parts.length == 0 || parts[0].isEmpty()) return null;
         Command command = commands.get(parts[0]);
         if (command == null) {
-            return "未知指令:" + parts[0] + ",输入 !帮助 查看指令列表";
+            // 无前缀模式下,未匹配的普通聊天消息不回复,避免刷屏
+            if (prefix.isEmpty()) return null;
+            return "未知指令:" + parts[0] + ",输入 " + prefix + "帮助 查看指令列表";
         }
         List<String> args = Arrays.asList(parts).subList(1, parts.length);
         try {
-            return command.execute(new CommandContext(userId, groupId, args));
+            return command.execute(new CommandContext(userId, groupId, args, prefix));
         } catch (Exception e) {
             log.error("执行指令 {} 失败", parts[0], e);
             return "天机紊乱,指令执行失败,请稍后再试。";

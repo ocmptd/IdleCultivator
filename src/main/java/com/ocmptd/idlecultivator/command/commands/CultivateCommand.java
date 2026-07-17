@@ -28,13 +28,13 @@ public class CultivateCommand implements Command {
 
     @Override
     public String usage() {
-        return "!修炼 [功法名] [时长] —— 开始自动修炼,默认 30 分钟(如:!修炼 紫府诀 4h)";
+        return "修炼 [功法名] [时长] —— 开始自动修炼,默认 30 分钟(如:修炼 紫府诀 4h)";
     }
 
     @Override
     public String execute(CommandContext ctx) {
         Optional<Player> opt = playerService.find(ctx.userId());
-        if (opt.isEmpty()) return "道友尚未创建角色,请先 !创建角色";
+        if (opt.isEmpty()) return "道友尚未创建角色,请先 " + ctx.prefix() + "创建角色";
 
         String method = null;
         int minutes = CultivationService.DEFAULT_MINUTES;

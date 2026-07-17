@@ -25,13 +25,13 @@ public class StatusCommand implements Command {
 
     @Override
     public String usage() {
-        return "!状态 —— 查看境界、属性与修炼进度";
+        return "状态 —— 查看境界、属性与修炼进度";
     }
 
     @Override
     public String execute(CommandContext ctx) {
         Optional<Player> opt = playerService.find(ctx.userId());
-        if (opt.isEmpty()) return "道友尚未创建角色,请先 !创建角色";
+        if (opt.isEmpty()) return "道友尚未创建角色,请先 " + ctx.prefix() + "创建角色";
         Player p = opt.get();
         StringBuilder sb = new StringBuilder(playerService.describe(p));
         Optional<CultivationTask> task = cultivationService.runningTask(p.userId());

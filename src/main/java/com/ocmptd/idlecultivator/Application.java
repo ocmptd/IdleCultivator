@@ -37,7 +37,7 @@ public class Application {
                 new CultivationService(new CultivationTaskRepository(db), playerService);
         BreakthroughService breakthroughService = new BreakthroughService(playerService);
 
-        CommandRouter router = new CommandRouter();
+        CommandRouter router = new CommandRouter(config.commandPrefix());
         router.register(new HelpCommand(router));
         router.register(new CreateRoleCommand(playerService));
         router.register(new CultivateCommand(playerService, cultivationService));
@@ -57,7 +57,7 @@ public class Application {
 
     /** 本地控制台模式:模拟单玩家发送指令,便于无凭据调试游戏逻辑。 */
     private static void runConsole(CommandRouter router) {
-        System.out.println("=== IdleCultivator 控制台模式(输入 !帮助 查看指令,exit 退出)===");
+        System.out.println("=== IdleCultivator 控制台模式(输入 " + router.prefix() + "帮助 查看指令,exit 退出)===");
         try (Scanner scanner = new Scanner(System.in)) {
             while (scanner.hasNextLine()) {
                 String line = scanner.nextLine().trim();
