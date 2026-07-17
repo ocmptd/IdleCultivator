@@ -61,7 +61,8 @@ public class Application {
         router.register(new MethodsCommand());
         router.register(new BagCommand(playerService));
         router.register(new BreakthroughCommand(playerService, breakthroughService));
-        router.register(new StatusCommand(playerService, cultivationService, portraitService));
+        router.register(new StatusCommand(
+                playerService, cultivationService, portraitService, imageCacheService));
         router.register(new PortraitCommand(playerService, portraitService, imageCacheService));
 
         GameScheduler scheduler = new GameScheduler(cultivationService);
