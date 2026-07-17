@@ -2,11 +2,13 @@ package com.ocmptd.idlecultivator;
 
 import com.ocmptd.idlecultivator.bot.BotService;
 import com.ocmptd.idlecultivator.command.CommandRouter;
+import com.ocmptd.idlecultivator.command.commands.BagCommand;
 import com.ocmptd.idlecultivator.command.commands.BreakthroughCommand;
 import com.ocmptd.idlecultivator.command.commands.CreateRoleCommand;
 import com.ocmptd.idlecultivator.command.commands.CultivateCommand;
 import com.ocmptd.idlecultivator.command.commands.HarvestCommand;
 import com.ocmptd.idlecultivator.command.commands.HelpCommand;
+import com.ocmptd.idlecultivator.command.commands.MethodsCommand;
 import com.ocmptd.idlecultivator.command.commands.PortraitCommand;
 import com.ocmptd.idlecultivator.command.commands.StatusCommand;
 import com.ocmptd.idlecultivator.config.BotConfig;
@@ -46,6 +48,8 @@ public class Application {
         router.register(new CreateRoleCommand(playerService));
         router.register(new CultivateCommand(playerService, cultivationService));
         router.register(new HarvestCommand(playerService, cultivationService));
+        router.register(new MethodsCommand());
+        router.register(new BagCommand(playerService));
         router.register(new BreakthroughCommand(playerService, breakthroughService));
         router.register(new StatusCommand(playerService, cultivationService, portraitService));
         router.register(new PortraitCommand(playerService, portraitService));
@@ -57,7 +61,10 @@ public class Application {
             new BotService(config, router, cultivationService).start();
         } else {
             log.warn("未配置 bot.appid / bot.token,进入本地控制台模式(复制 config.properties.example 为 config.properties 可接入 QQ)");
-            cultivationService.setNotifier((task, msg) -> System.out.println("[推送] " + msg));
+            cultivationService.setNotifier((task, msg) -> {
+                System.out.println("[推送] " + msg);
+                return true;
+            });
             runConsole(router);
         }
     }
