@@ -30,7 +30,7 @@ import java.util.Optional;
 public class RightCodesImageGenerator implements ImageCacheService.ImageGenerator {
     private static final Logger log = LoggerFactory.getLogger(RightCodesImageGenerator.class);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
-    private static final Duration POLL_INTERVAL = Duration.ofSeconds(3);
+    private static final Duration POLL_INTERVAL = Duration.ofSeconds(10);
     private static final Duration TOTAL_TIMEOUT = Duration.ofSeconds(120);
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -57,6 +57,7 @@ public class RightCodesImageGenerator implements ImageCacheService.ImageGenerato
     public Optional<Path> generate(String prompt) {
         try {
             String taskId = submit(prompt);
+            log.info("图片生成任务已提交,taskId={},prompt={}", taskId, prompt);
             String imageUrl = poll(taskId);
             if (imageUrl == null) return Optional.empty();
             return Optional.of(download(imageUrl, prompt));
@@ -98,13 +99,21 @@ public class RightCodesImageGenerator implements ImageCacheService.ImageGenerato
     private String poll(String taskId) throws IOException, InterruptedException {
         long deadline = System.nanoTime() + TOTAL_TIMEOUT.toNanos();
         while (System.nanoTime() < deadline) {
-            HttpRequest request = requestBuilder(baseUrl + "/v1/tasks/" + taskId)
-                    .GET()
-                    .build();
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            ensureSuccess(response, "查询图片生成任务");
+            JsonObject json;
+            try {
+                HttpRequest request = requestBuilder(baseUrl + "/v1/tasks/" + taskId)
+                        .GET()
+                        .build();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                ensureSuccess(response, "查询图片生成任务");
+                json = JsonParser.parseString(response.body()).getAsJsonObject();
+            } catch (IOException e) {
+                // 单次轮询请求异常(如请求超时)不代表生成失败,继续轮询直到总超时
+                log.warn("图片轮询请求异常,不代表生成失败,将继续重试", e);
+                Thread.sleep(POLL_INTERVAL.toMillis());
+                continue;
+            }
 
-            JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
             String imageUrl = imageUrl(json);
             if (imageUrl != null) return imageUrl;
 
