@@ -61,7 +61,11 @@ public class BotService {
                 String reply = router.handle(event.getSender().getOpenid(), event.getSubject().getOpenid(), content);
                 reply = withPendingNotices(event.getSender().getOpenid(), reply);
                 log.debug("群消息 content={} reply={}", content, reply != null);
-                if (reply != null) event.sendMessage(reply);
+                if (reply != null) {
+                    event.sendMessage(new MessageChain()
+                            .at(event.getSender().getOpenid())
+                            .text("\n" + reply));
+                }
             }
 
             @EventReceiver
