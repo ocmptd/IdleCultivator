@@ -2,6 +2,8 @@ package com.ocmptd.idlecultivator.bot;
 
 import com.ocmptd.idlecultivator.command.CommandRouter;
 import com.ocmptd.idlecultivator.config.BotConfig;
+import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
+import com.ocmptd.idlecultivator.game.cultivation.CultivationTask;
 import io.github.kloping.qqbot.Starter;
 import io.github.kloping.qqbot.api.Intents;
 import io.github.kloping.qqbot.api.SendAble;
@@ -10,11 +12,14 @@ import io.github.kloping.qqbot.api.v2.GroupMessageEvent;
 import io.github.kloping.qqbot.entities.ex.At;
 import io.github.kloping.qqbot.entities.ex.PlainText;
 import io.github.kloping.qqbot.entities.ex.msg.MessageChain;
+import io.github.kloping.qqbot.entities.qqpd.v2.Group;
 import io.github.kloping.qqbot.impl.ListenerHost;
 import io.github.kloping.qqbot.impl.ListenerHost.EventReceiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -27,11 +32,15 @@ public class BotService {
 
     private final BotConfig config;
     private final CommandRouter router;
+    private final CultivationService cultivationService;
+    /** 群 openid → 最近一次消息的 Group,用于修炼结算主动推送 */
+    private final Map<String, Group> knownGroups = new ConcurrentHashMap<>();
     private Starter starter;
 
-    public BotService(BotConfig config, CommandRouter router) {
+    public BotService(BotConfig config, CommandRouter router, CultivationService cultivationService) {
         this.config = config;
         this.router = router;
+        this.cultivationService = cultivationService;
     }
 
     public void start() {
@@ -42,6 +51,7 @@ public class BotService {
         starter.registerListenerHost(new ListenerHost() {
             @EventReceiver
             public void onGroupMessage(GroupMessageEvent event) {
+                knownGroups.put(event.getSubject().getOpenid(), event.getSubject());
                 if (config.requireAt() && !containsAt(event.getMessage())) return;
                 String content = extractText(event.getMessage());
                 String reply = router.handle(event.getSender().getOpenid(), event.getSubject().getOpenid(), content);
@@ -56,8 +66,23 @@ public class BotService {
                 if (reply != null) event.sendMessage(reply);
             }
         });
+        cultivationService.setNotifier(this::pushCultivationMessage);
         log.info("QQ 机器人已启动 (appid={}, 指令前缀=\"{}\", 仅@触发={})",
                 config.appId(), router.prefix(), config.requireAt());
+    }
+
+    /** 修炼结算/到期提醒推送到任务所在群。 */
+    private void pushCultivationMessage(CultivationTask task, String message) {
+        Group group = task.groupId() == null ? null : knownGroups.get(task.groupId());
+        if (group == null) {
+            log.info("[推送降级为日志] {}: {}", task.userId(), message);
+            return;
+        }
+        try {
+            group.send(message);
+        } catch (Exception e) {
+            log.error("推送修炼消息到群 {} 失败", task.groupId(), e);
+        }
     }
 
     /**

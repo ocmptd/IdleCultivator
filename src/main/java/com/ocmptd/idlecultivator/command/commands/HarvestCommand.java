@@ -2,36 +2,35 @@ package com.ocmptd.idlecultivator.command.commands;
 
 import com.ocmptd.idlecultivator.command.Command;
 import com.ocmptd.idlecultivator.command.CommandContext;
-import com.ocmptd.idlecultivator.game.breakthrough.BreakthroughService;
+import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
 import com.ocmptd.idlecultivator.game.player.Player;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
 
 import java.util.Optional;
 
-public class BreakthroughCommand implements Command {
+public class HarvestCommand implements Command {
     private final PlayerService playerService;
-    private final BreakthroughService breakthroughService;
+    private final CultivationService cultivationService;
 
-    public BreakthroughCommand(PlayerService playerService, BreakthroughService breakthroughService) {
+    public HarvestCommand(PlayerService playerService, CultivationService cultivationService) {
         this.playerService = playerService;
-        this.breakthroughService = breakthroughService;
+        this.cultivationService = cultivationService;
     }
 
     @Override
     public String name() {
-        return "突破";
+        return "收获";
     }
 
     @Override
     public String usage() {
-        return "突破 [用丹] —— 修为足够时突破至下一境界,带「用丹」消耗筑基丹提升成功率至 95%";
+        return "收获 —— 收获已完成的长时修炼(快速修炼自动收获)";
     }
 
     @Override
     public String execute(CommandContext ctx) {
         Optional<Player> opt = playerService.find(ctx.userId());
         if (opt.isEmpty()) return "道友尚未创建角色,请先 " + ctx.prefix() + "创建角色";
-        boolean usePill = "用丹".equals(ctx.arg(0));
-        return breakthroughService.attempt(opt.get(), usePill);
+        return cultivationService.harvest(opt.get());
     }
 }
