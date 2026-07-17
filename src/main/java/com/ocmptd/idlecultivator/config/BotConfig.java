@@ -15,6 +15,8 @@ public class BotConfig {
     private final String secret;
     private final boolean sandbox;
     private final String dbPath;
+    private final String commandPrefix;
+    private final boolean requireAt;
 
     private BotConfig(Properties props) {
         this.appId = props.getProperty("bot.appid", "").trim();
@@ -22,6 +24,8 @@ public class BotConfig {
         this.secret = props.getProperty("bot.secret", "").trim();
         this.sandbox = Boolean.parseBoolean(props.getProperty("bot.sandbox", "false").trim());
         this.dbPath = props.getProperty("db.path", "idle-cultivator.db").trim();
+        this.commandPrefix = props.getProperty("command.prefix", "!").trim();
+        this.requireAt = Boolean.parseBoolean(props.getProperty("command.require-at", "false").trim());
     }
 
     public static BotConfig load(Path path) throws IOException {
@@ -56,5 +60,15 @@ public class BotConfig {
 
     public String dbPath() {
         return dbPath;
+    }
+
+    /** 指令前缀,可为空字符串(无前缀) */
+    public String commandPrefix() {
+        return commandPrefix;
+    }
+
+    /** 群消息是否仅在 @ 机器人时触发 */
+    public boolean requireAt() {
+        return requireAt;
     }
 }

@@ -18,14 +18,14 @@ public class HelpCommand implements Command {
 
     @Override
     public String usage() {
-        return "!帮助 —— 查看指令列表";
+        return "帮助 —— 查看指令列表";
     }
 
     @Override
     public String execute(CommandContext ctx) {
         StringBuilder sb = new StringBuilder("=== 修仙指令一览 ===");
         for (Command c : router.commands().values()) {
-            sb.append("\n").append(c.usage());
+            sb.append("\n").append(router.prefix()).append(c.usage());
         }
         return sb.toString();
     }

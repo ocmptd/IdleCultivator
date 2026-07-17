@@ -4,18 +4,26 @@ import com.ocmptd.idlecultivator.command.CommandRouter;
 import com.ocmptd.idlecultivator.config.BotConfig;
 import io.github.kloping.qqbot.Starter;
 import io.github.kloping.qqbot.api.Intents;
+import io.github.kloping.qqbot.api.SendAble;
 import io.github.kloping.qqbot.api.v2.FriendMessageEvent;
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent;
+import io.github.kloping.qqbot.entities.ex.At;
+import io.github.kloping.qqbot.entities.ex.PlainText;
+import io.github.kloping.qqbot.entities.ex.msg.MessageChain;
 import io.github.kloping.qqbot.impl.ListenerHost;
 import io.github.kloping.qqbot.impl.ListenerHost.EventReceiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.regex.Pattern;
 
 /**
  * qqpd-bot-java 接入层:启动 Starter 并将群/好友消息转发给 {@link CommandRouter}。
  */
 public class BotService {
     private static final Logger log = LoggerFactory.getLogger(BotService.class);
+    /** 消息文本中的 at 标记,如 <@xxx> 或 <qqbot-at-user id="xxx" /> */
+    private static final Pattern AT_TAG = Pattern.compile("<@!?[0-9A-Za-z_-]+>|<qqbot-at-user\\s+id=\"[^\"]*\"\\s*/>");
 
     private final BotConfig config;
     private final CommandRouter router;
@@ -34,18 +42,46 @@ public class BotService {
         starter.registerListenerHost(new ListenerHost() {
             @EventReceiver
             public void onGroupMessage(GroupMessageEvent event) {
-                String content = event.getMessage().toString().trim();
+                if (config.requireAt() && !containsAt(event.getMessage())) return;
+                String content = extractText(event.getMessage());
                 String reply = router.handle(event.getSender().getOpenid(), event.getSubject().getOpenid(), content);
+                log.debug("群消息 content={} reply={}", content, reply != null);
                 if (reply != null) event.sendMessage(reply);
             }
 
             @EventReceiver
             public void onFriendMessage(FriendMessageEvent event) {
-                String content = event.getMessage().toString().trim();
+                String content = extractText(event.getMessage());
                 String reply = router.handle(event.getSender().getOpenid(), null, content);
                 if (reply != null) event.sendMessage(reply);
             }
         });
-        log.info("QQ 机器人已启动 (appid={})", config.appId());
+        log.info("QQ 机器人已启动 (appid={}, 指令前缀=\"{}\", 仅@触发={})",
+                config.appId(), router.prefix(), config.requireAt());
+    }
+
+    /**
+     * 从消息链提取纯文本(拼接 PlainText 片段并去除 at 标记)。
+     * 注意:MessageChain.toString() 返回 List.toString() 形式(带 [] 包裹),不可直接用于指令解析。
+     */
+    public static String extractText(MessageChain chain) {
+        if (chain == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (SendAble element : chain) {
+            if (element instanceof PlainText text) {
+                sb.append(text.getText());
+            }
+        }
+        return AT_TAG.matcher(sb.toString()).replaceAll(" ").trim();
+    }
+
+    public static boolean containsAt(MessageChain chain) {
+        if (chain == null) return false;
+        StringBuilder sb = new StringBuilder();
+        for (SendAble element : chain) {
+            if (element instanceof At) return true;
+            if (element instanceof PlainText text) sb.append(text.getText());
+        }
+        return AT_TAG.matcher(sb).find();
     }
 }

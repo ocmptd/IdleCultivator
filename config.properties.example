@@ -8,3 +8,10 @@ bot.sandbox=false
 
 # SQLite 数据库文件路径
 db.path=idle-cultivator.db
+
+# 指令前缀,默认 "!";设为空则无前缀(直接输入 修炼/状态 等指令名)
+command.prefix=!
+
+# 群消息是否仅在 @ 机器人时触发,默认 false(不 @ 也触发)
+# 注意:公域机器人腾讯服务端通常只推送被 @ 的群消息
+command.require-at=false
