@@ -8,7 +8,6 @@ import com.ocmptd.idlecultivator.game.portrait.PortraitService;
 import com.ocmptd.idlecultivator.game.player.Player;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
 
-import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
 
@@ -42,29 +41,33 @@ public class PortraitCommand implements Command {
         if (opt.isEmpty()) return "道友尚未创建角色,请先 " + ctx.prefix() + "创建角色";
         Player p = opt.get();
         if ("道具".equals(ctx.arg(0))) {
-            return itemPrompts(p);
+            return itemPrompts(ctx, p);
         }
         String prompt = portraitService.imagePrompt(p);
         return portraitService.describeAppearance(p)
                 + "\n\n=== 图片描述词 ===\n" + prompt
-                + "\n缓存状态: " + cacheStatus(imageCache.lookupOrGenerateAsync(prompt));
+                + "\n缓存状态: " + cacheStatus(ctx, imageCache.lookupOrGenerateAsync(prompt));
     }
 
-    private String itemPrompts(Player p) {
+    private String itemPrompts(CommandContext ctx, Player p) {
         Map<String, Integer> items = Inventory.parse(p.inventory());
         if (items.isEmpty()) return "背包空空如也,暂无道具描述词。";
         StringBuilder sb = new StringBuilder("=== 道具图片描述词 ===");
         for (String name : items.keySet()) {
             String prompt = portraitService.itemImagePrompt(name);
             sb.append("\n【").append(name).append("】").append(prompt)
-                    .append("\n缓存状态: ").append(cacheStatus(imageCache.lookupOrGenerateAsync(prompt)));
+                    .append("\n缓存状态: ")
+                    .append(cacheStatus(ctx, imageCache.lookupOrGenerateAsync(prompt)));
         }
         return sb.toString();
     }
 
-    private String cacheStatus(ImageCacheService.AsyncLookup result) {
+    private String cacheStatus(CommandContext ctx, ImageCacheService.AsyncLookup result) {
         return switch (result.state()) {
-            case HIT -> "已生成,图片路径: " + result.path();
+            case HIT -> {
+                ctx.addImage(result.path());
+                yield "已生成(图片见下)";
+            }
             case GENERATING -> "正在生成图片,请稍后再用 !形象描述 查看";
             case DISABLED -> "(暂无缓存图片,待接入 AI 生图)";
         };

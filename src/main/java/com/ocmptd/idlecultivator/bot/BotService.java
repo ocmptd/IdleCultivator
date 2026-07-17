@@ -1,6 +1,7 @@
 package com.ocmptd.idlecultivator.bot;
 
 import com.ocmptd.idlecultivator.command.CommandRouter;
+import com.ocmptd.idlecultivator.command.CommandReply;
 import com.ocmptd.idlecultivator.config.BotConfig;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationTask;
@@ -11,6 +12,7 @@ import io.github.kloping.qqbot.api.SendAble;
 import io.github.kloping.qqbot.api.v2.FriendMessageEvent;
 import io.github.kloping.qqbot.api.v2.GroupMessageEvent;
 import io.github.kloping.qqbot.entities.ex.At;
+import io.github.kloping.qqbot.entities.ex.Image;
 import io.github.kloping.qqbot.entities.ex.PlainText;
 import io.github.kloping.qqbot.entities.ex.msg.MessageChain;
 import io.github.kloping.qqbot.entities.qqpd.v2.Group;
@@ -19,6 +21,10 @@ import io.github.kloping.qqbot.impl.ListenerHost.EventReceiver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
@@ -58,22 +64,29 @@ public class BotService {
                 knownGroups.put(event.getSubject().getOpenid(), event.getSubject());
                 if (config.requireAt() && !containsAt(event.getMessage())) return;
                 String content = extractText(event.getMessage());
-                String reply = router.handle(event.getSender().getOpenid(), event.getSubject().getOpenid(), content);
+                CommandReply commandReply =
+                        router.handleWithReply(event.getSender().getOpenid(),
+                                event.getSubject().getOpenid(), content);
+                String reply = commandReply == null ? null : commandReply.text();
                 reply = withPendingNotices(event.getSender().getOpenid(), reply);
-                log.debug("群消息 content={} reply={}", content, reply != null);
-                if (reply != null) {
-                    event.sendMessage(new MessageChain()
-                            .at(event.getSender().getOpenid())
-                            .text("\n" + reply));
+                List<Path> images = commandReply == null ? List.of() : commandReply.images();
+                log.debug("群消息 content={} reply={} images={}", content, reply != null, images.size());
+                MessageChain chain = groupReply(event.getSender().getOpenid(), reply, images);
+                if (chain != null) {
+                    event.sendMessage(chain);
                 }
             }
 
             @EventReceiver
             public void onFriendMessage(FriendMessageEvent event) {
                 String content = extractText(event.getMessage());
-                String reply = router.handle(event.getSender().getOpenid(), null, content);
+                CommandReply commandReply =
+                        router.handleWithReply(event.getSender().getOpenid(), null, content);
+                String reply = commandReply == null ? null : commandReply.text();
                 reply = withPendingNotices(event.getSender().getOpenid(), reply);
-                if (reply != null) event.sendMessage(reply);
+                List<Path> images = commandReply == null ? List.of() : commandReply.images();
+                MessageChain chain = friendReply(reply, images);
+                if (chain != null) event.sendMessage(chain);
             }
         });
         cultivationService.setNotifier(this::pushCultivationMessage);
@@ -90,6 +103,32 @@ public class BotService {
         if (notices.isEmpty()) return reply;
         String pending = "【修炼结算】" + String.join("\n【修炼结算】", notices);
         return reply == null ? pending : pending + "\n" + reply;
+    }
+
+    private MessageChain groupReply(String userId, String text, List<Path> images) {
+        MessageChain chain = new MessageChain().at(userId);
+        if (text != null && !text.isEmpty()) chain.text("\n" + text);
+        appendImages(chain, images);
+        return chain.size() == 1 ? null : chain;
+    }
+
+    private MessageChain friendReply(String text, List<Path> images) {
+        MessageChain chain = new MessageChain();
+        if (text != null && !text.isEmpty()) chain.text(text);
+        appendImages(chain, images);
+        return chain.isEmpty() ? null : chain;
+    }
+
+    private void appendImages(MessageChain chain, List<Path> images) {
+        for (Path imagePath : images) {
+            try {
+                chain.append(new Image(
+                        Files.readAllBytes(imagePath),
+                        imagePath.getFileName().toString()));
+            } catch (IOException e) {
+                log.warn("读取图片失败,跳过发送: {}", imagePath, e);
+            }
+        }
     }
 
     /** 修炼结算/到期提醒推送到任务所在群,返回是否推送成功(失败时由修炼系统自动结算)。 */

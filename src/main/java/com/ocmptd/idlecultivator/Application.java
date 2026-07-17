@@ -86,8 +86,14 @@ public class Application {
             while (scanner.hasNextLine()) {
                 String line = scanner.nextLine().trim();
                 if (line.equalsIgnoreCase("exit")) break;
-                String reply = router.handle("console-user", "console-group", line);
-                if (reply != null) System.out.println(reply);
+                var reply = router.handleWithReply("console-user", "console-group", line);
+                if (reply == null) continue;
+                if (reply.text() != null && !reply.text().isEmpty()) {
+                    System.out.println(reply.text());
+                }
+                for (Path image : reply.images()) {
+                    System.out.println("[图片] " + image);
+                }
             }
         }
     }
