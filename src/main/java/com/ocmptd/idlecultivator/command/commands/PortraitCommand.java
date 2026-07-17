@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * 展示角色/道具的图片描述词(AI 绘图 prompt),暂不实际生成图片。
+ * 展示角色/道具的图片描述词(AI 绘图 prompt),并异步触发图片生成。
  */
 public class PortraitCommand implements Command {
     private final PlayerService playerService;
@@ -46,8 +46,8 @@ public class PortraitCommand implements Command {
         }
         String prompt = portraitService.imagePrompt(p);
         return portraitService.describeAppearance(p)
-                + "\n\n=== 图片描述词(暂不生成图片) ===\n" + prompt
-                + "\n缓存状态: " + cacheStatus(imageCache.getOrGenerate(prompt));
+                + "\n\n=== 图片描述词 ===\n" + prompt
+                + "\n缓存状态: " + cacheStatus(imageCache.lookupOrGenerateAsync(prompt));
     }
 
     private String itemPrompts(Player p) {
@@ -57,13 +57,16 @@ public class PortraitCommand implements Command {
         for (String name : items.keySet()) {
             String prompt = portraitService.itemImagePrompt(name);
             sb.append("\n【").append(name).append("】").append(prompt)
-                    .append("\n缓存状态: ").append(cacheStatus(imageCache.getOrGenerate(prompt)));
+                    .append("\n缓存状态: ").append(cacheStatus(imageCache.lookupOrGenerateAsync(prompt)));
         }
         return sb.toString();
     }
 
-    private String cacheStatus(Optional<Path> cachedPath) {
-        return cachedPath.map(path -> "命中,图片路径: " + path)
-                .orElse("(暂无缓存图片,待接入 AI 生图)");
+    private String cacheStatus(ImageCacheService.AsyncLookup result) {
+        return switch (result.state()) {
+            case HIT -> "已生成,图片路径: " + result.path();
+            case GENERATING -> "正在生成图片,请稍后再用 !形象描述 查看";
+            case DISABLED -> "(暂无缓存图片,待接入 AI 生图)";
+        };
     }
 }

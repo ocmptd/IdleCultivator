@@ -16,6 +16,12 @@ public class BotConfig {
     private final boolean sandbox;
     private final String dbPath;
     private final String imageCacheDir;
+    private final String imageApiUrl;
+    private final String imageApiKey;
+    private final String imageApiModel;
+    private final String imageApiSize;
+    private final String imageApiImageSize;
+    private final String imageApiPromptPrefix;
     private final String commandPrefix;
     private final boolean requireAt;
 
@@ -26,6 +32,13 @@ public class BotConfig {
         this.sandbox = Boolean.parseBoolean(props.getProperty("bot.sandbox", "false").trim());
         this.dbPath = props.getProperty("db.path", "idle-cultivator.db").trim();
         this.imageCacheDir = props.getProperty("image.cache.dir", "image-cache").trim();
+        this.imageApiUrl = props.getProperty("image.api.url", "https://www.right.codes").trim();
+        this.imageApiKey = props.getProperty("image.api.key", "").trim();
+        this.imageApiModel = props.getProperty("image.api.model", "gpt-image-2").trim();
+        this.imageApiSize = props.getProperty("image.api.size", "1:1").trim();
+        this.imageApiImageSize = props.getProperty("image.api.image-size", "1K").trim();
+        this.imageApiPromptPrefix = props.getProperty("image.api.prompt-prefix",
+                "游戏素材,添加 Idle Cultivator 指尖修仙 左上角水印,").trim();
         this.commandPrefix = props.getProperty("command.prefix", "!").trim();
         this.requireAt = Boolean.parseBoolean(props.getProperty("command.require-at", "false").trim());
     }
@@ -66,6 +79,30 @@ public class BotConfig {
 
     public String imageCacheDir() {
         return imageCacheDir;
+    }
+
+    public String imageApiUrl() {
+        return imageApiUrl;
+    }
+
+    public String imageApiKey() {
+        return imageApiKey;
+    }
+
+    public String imageApiModel() {
+        return imageApiModel;
+    }
+
+    public String imageApiSize() {
+        return imageApiSize;
+    }
+
+    public String imageApiImageSize() {
+        return imageApiImageSize;
+    }
+
+    public String imageApiPromptPrefix() {
+        return imageApiPromptPrefix;
     }
 
     /** 指令前缀,可为空字符串(无前缀) */

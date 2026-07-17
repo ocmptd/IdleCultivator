@@ -12,6 +12,14 @@ db.path=idle-cultivator.db
 # 图片缓存目录
 image.cache.dir=image-cache
 
+# 图片生成 API
+image.api.url=https://www.right.codes
+image.api.key=
+image.api.model=gpt-image-2
+image.api.size=1:1
+image.api.image-size=1K
+image.api.prompt-prefix=游戏素材,添加 Idle Cultivator 指尖修仙 左上角水印,
+
 # 指令前缀,默认 "!";设为空则无前缀(直接输入 修炼/状态 等指令名)
 command.prefix=!
 
