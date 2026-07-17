@@ -1,0 +1,10 @@
+# QQ 机器人凭据 (https://q.qq.com/)
+bot.appid=
+bot.token=
+bot.secret=
+
+# 是否使用沙箱环境
+bot.sandbox=false
+
+# SQLite 数据库文件路径
+db.path=idle-cultivator.db
