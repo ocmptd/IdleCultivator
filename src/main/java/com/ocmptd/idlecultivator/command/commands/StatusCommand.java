@@ -4,6 +4,7 @@ import com.ocmptd.idlecultivator.command.Command;
 import com.ocmptd.idlecultivator.command.CommandContext;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationTask;
+import com.ocmptd.idlecultivator.game.image.ImageCacheService;
 import com.ocmptd.idlecultivator.game.player.Player;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
 import com.ocmptd.idlecultivator.game.portrait.PortraitService;
@@ -14,11 +15,14 @@ public class StatusCommand implements Command {
     private final PlayerService playerService;
     private final CultivationService cultivationService;
     private final PortraitService portraitService;
+    private final ImageCacheService imageCache;
 
-    public StatusCommand(PlayerService playerService, CultivationService cultivationService, PortraitService portraitService) {
+    public StatusCommand(PlayerService playerService, CultivationService cultivationService,
+                         PortraitService portraitService, ImageCacheService imageCache) {
         this.playerService = playerService;
         this.cultivationService = cultivationService;
         this.portraitService = portraitService;
+        this.imageCache = imageCache;
     }
 
     @Override
@@ -50,6 +54,18 @@ public class StatusCommand implements Command {
             }
         }
         sb.append("\n").append(portraitService.describeAppearance(p));
+        String appearancePrompt = portraitService.appearancePrompt(p);
+        ImageCacheService.AsyncLookup image =
+                imageCache.lookupOrGenerateAsync(appearancePrompt);
+        switch (image.state()) {
+            case HIT -> {
+                ctx.addImage(image.path());
+                sb.append("\n形象图片已生成(见下)");
+            }
+            case GENERATING -> sb.append("\n形象图片生成中,请稍后再看");
+            case DISABLED -> {
+            }
+        }
         return sb.toString();
     }
 }
