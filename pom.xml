@@ -34,6 +34,14 @@
             </exclusions>
         </dependency>
 
+        <!-- Lombok(SDK 传递的 1.18.26 不支持 JDK21,显式升级) -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.34</version>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- SQLite 持久化 -->
         <dependency>
             <groupId>org.xerial</groupId>
