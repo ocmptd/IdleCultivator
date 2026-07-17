@@ -10,6 +10,7 @@ import com.ocmptd.idlecultivator.command.commands.HarvestCommand;
 import com.ocmptd.idlecultivator.command.commands.HelpCommand;
 import com.ocmptd.idlecultivator.command.commands.MethodsCommand;
 import com.ocmptd.idlecultivator.command.commands.PortraitCommand;
+import com.ocmptd.idlecultivator.command.commands.RenameCommand;
 import com.ocmptd.idlecultivator.command.commands.StatusCommand;
 import com.ocmptd.idlecultivator.config.BotConfig;
 import com.ocmptd.idlecultivator.game.breakthrough.BreakthroughService;
@@ -46,6 +47,7 @@ public class Application {
         CommandRouter router = new CommandRouter(config.commandPrefix());
         router.register(new HelpCommand(router));
         router.register(new CreateRoleCommand(playerService));
+        router.register(new RenameCommand(playerService));
         router.register(new CultivateCommand(playerService, cultivationService));
         router.register(new HarvestCommand(playerService, cultivationService));
         router.register(new MethodsCommand());

@@ -15,6 +15,7 @@ public class Player {
     private String inventory = "";
     private CultivationDirection direction;
     private int activeStreak;
+    private long nameChangedAt;
     private long createdAt;
 
     public Player(String userId) {
@@ -111,6 +112,14 @@ public class Player {
 
     public void setActiveStreak(int activeStreak) {
         this.activeStreak = activeStreak;
+    }
+
+    public long nameChangedAt() {
+        return nameChangedAt;
+    }
+
+    public void setNameChangedAt(long nameChangedAt) {
+        this.nameChangedAt = nameChangedAt;
     }
 
     public long createdAt() {
