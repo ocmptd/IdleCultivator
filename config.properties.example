@@ -9,6 +9,9 @@ bot.sandbox=false
 # SQLite 数据库文件路径
 db.path=idle-cultivator.db
 
+# 图片缓存目录
+image.cache.dir=image-cache
+
 # 指令前缀,默认 "!";设为空则无前缀(直接输入 修炼/状态 等指令名)
 command.prefix=!
 

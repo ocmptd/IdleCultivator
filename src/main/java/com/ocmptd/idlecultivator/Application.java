@@ -15,6 +15,7 @@ import com.ocmptd.idlecultivator.command.commands.StatusCommand;
 import com.ocmptd.idlecultivator.config.BotConfig;
 import com.ocmptd.idlecultivator.game.breakthrough.BreakthroughService;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
+import com.ocmptd.idlecultivator.game.image.ImageCacheService;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
 import com.ocmptd.idlecultivator.game.portrait.PortraitService;
 import com.ocmptd.idlecultivator.scheduler.GameScheduler;
@@ -45,6 +46,7 @@ public class Application {
                 new CultivationService(new CultivationTaskRepository(db), playerService, noticeRepository);
         BreakthroughService breakthroughService = new BreakthroughService(playerService);
         PortraitService portraitService = new PortraitService();
+        ImageCacheService imageCacheService = new ImageCacheService(Path.of(config.imageCacheDir()));
 
         CommandRouter router = new CommandRouter(config.commandPrefix());
         router.register(new HelpCommand(router));
@@ -56,7 +58,7 @@ public class Application {
         router.register(new BagCommand(playerService));
         router.register(new BreakthroughCommand(playerService, breakthroughService));
         router.register(new StatusCommand(playerService, cultivationService, portraitService));
-        router.register(new PortraitCommand(playerService, portraitService));
+        router.register(new PortraitCommand(playerService, portraitService, imageCacheService));
 
         GameScheduler scheduler = new GameScheduler(cultivationService);
         scheduler.start();

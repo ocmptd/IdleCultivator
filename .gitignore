@@ -3,6 +3,12 @@ target/
 *.log
 logs/
 config.properties
+image-cache/*.png
+image-cache/*.jpg
+image-cache/*.jpeg
+image-cache/*.gif
+image-cache/*.webp
+!image-cache/map.json
 *.db
 *.iml
 .idea/

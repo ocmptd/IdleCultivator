@@ -1,10 +1,7 @@
 package com.ocmptd.idlecultivator.game.portrait;
 
-import com.ocmptd.idlecultivator.game.item.Inventory;
 import com.ocmptd.idlecultivator.game.player.Gender;
 import com.ocmptd.idlecultivator.game.player.Player;
-
-import java.util.Map;
 
 /**
  * 形象描述服务:根据角色性别/境界/方向/装备生成
@@ -72,16 +69,5 @@ public class PortraitService {
             default -> "一件散发灵气的修仙道具「" + itemName + "」";
         };
         return "中国古风修仙物品特写," + feature + ",仙气缭绕,水墨画风格,高清细节";
-    }
-
-    /** 生成背包中每件道具的图片描述词列表。 */
-    public String allItemPrompts(Player p) {
-        Map<String, Integer> items = Inventory.parse(p.inventory());
-        if (items.isEmpty()) return "背包空空如也,暂无道具描述词。";
-        StringBuilder sb = new StringBuilder("=== 道具图片描述词 ===");
-        for (String name : items.keySet()) {
-            sb.append("\n【").append(name).append("】").append(itemImagePrompt(name));
-        }
-        return sb.toString();
     }
 }
