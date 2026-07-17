@@ -2,6 +2,7 @@ package com.ocmptd.idlecultivator.command.commands;
 
 import com.ocmptd.idlecultivator.command.Command;
 import com.ocmptd.idlecultivator.command.CommandContext;
+import com.ocmptd.idlecultivator.game.cultivation.CultivationMethod;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
 import com.ocmptd.idlecultivator.game.player.Player;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
@@ -28,7 +29,7 @@ public class CultivateCommand implements Command {
 
     @Override
     public String usage() {
-        return "修炼 [功法名] [时长] —— 开始自动修炼,默认 30 分钟(如:修炼 紫府诀 4h)";
+        return "修炼 [功法名] [时长] —— 开始自动修炼,默认 18~28 分钟随机(如:修炼 紫府诀 4h)";
     }
 
     @Override
@@ -36,14 +37,17 @@ public class CultivateCommand implements Command {
         Optional<Player> opt = playerService.find(ctx.userId());
         if (opt.isEmpty()) return "道友尚未创建角色,请先 " + ctx.prefix() + "创建角色";
 
-        String method = null;
-        int minutes = CultivationService.DEFAULT_MINUTES;
+        CultivationMethod method = null;
+        int minutes = -1;
         for (String arg : ctx.args()) {
             Integer parsed = parseMinutes(arg);
             if (parsed != null) {
                 minutes = parsed;
             } else if (method == null) {
-                method = arg;
+                method = CultivationMethod.fromLabel(arg);
+                if (method == null) {
+                    return "未知功法:" + arg + "\n" + CultivationMethod.describeAll();
+                }
             }
         }
         return cultivationService.start(opt.get(), method, minutes);

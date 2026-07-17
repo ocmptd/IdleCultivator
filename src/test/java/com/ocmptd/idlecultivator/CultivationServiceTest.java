@@ -1,5 +1,6 @@
 package com.ocmptd.idlecultivator;
 
+import com.ocmptd.idlecultivator.game.cultivation.CultivationMethod;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationTask;
 import com.ocmptd.idlecultivator.game.item.Inventory;
@@ -65,7 +66,10 @@ class CultivationServiceTest {
         backdateTask(activeTaskId(), 31 * 60_000L);
 
         AtomicReference<String> pushed = new AtomicReference<>();
-        service.setNotifier((task, msg) -> pushed.set(msg));
+        service.setNotifier((task, msg) -> {
+            pushed.set(msg);
+            return true;
+        });
         service.settleFinishedTasks();
 
         assertNotNull(pushed.get());
@@ -78,12 +82,15 @@ class CultivationServiceTest {
     @Test
     void longCultivationNeedsHarvest() throws Exception {
         Player p = newPlayer();
-        String start = service.start(p, "玄天功", 240);
+        String start = service.start(p, CultivationMethod.TU_NA, 240);
         assertTrue(start.contains("+250 修为"), start);
         backdateTask(activeTaskId(), 240 * 60_000L + 30_000L); // 超时不足 1 分钟,无溢出
 
         AtomicReference<String> pushed = new AtomicReference<>();
-        service.setNotifier((task, msg) -> pushed.set(msg));
+        service.setNotifier((task, msg) -> {
+            pushed.set(msg);
+            return true;
+        });
         service.settleFinishedTasks();
         assertTrue(pushed.get().contains("可以收获"), pushed.get());
         assertEquals(CultivationTask.STATUS_READY, service.activeTask("u1").orElseThrow().status());
@@ -108,10 +115,51 @@ class CultivationServiceTest {
     }
 
     @Test
-    void harvestBeforeFinishRejected() {
+    void earlyHarvestUnderTenMinutesRejected() {
         Player p = newPlayer();
         service.start(p, null, 120);
         String result = service.harvest(p);
-        assertTrue(result.contains("尚未完成"), result);
+        assertTrue(result.contains("不足 10 分钟"), result);
+        assertTrue(service.activeTask("u1").isPresent());
+    }
+
+    @Test
+    void earlyHarvestDecaysReward() throws Exception {
+        Player p = newPlayer();
+        service.start(p, null, 120); // 2h → +125 修为
+        backdateTask(activeTaskId(), 60 * 60_000L); // 修炼进度 50%
+
+        String result = service.harvest(playerService.find("u1").orElseThrow());
+        assertTrue(result.contains("提前结束"), result);
+        long exp = playerService.find("u1").orElseThrow().exp();
+        // 125 × 0.5 × (0.5 + 0.25) ≈ 47
+        assertTrue(exp > 40 && exp < 55, "提前收获应按进度衰减: " + exp);
+        assertTrue(service.activeTask("u1").isEmpty());
+    }
+
+    @Test
+    void pushFailureAutoSettlesLongTask() throws Exception {
+        Player p = newPlayer();
+        service.start(p, null, 240); // 默认 notifier 返回 false(推送不可用)
+        backdateTask(activeTaskId(), 241 * 60_000L);
+
+        service.settleFinishedTasks();
+        assertEquals(250, playerService.find("u1").orElseThrow().exp());
+        assertTrue(service.activeTask("u1").isEmpty());
+    }
+
+    @Test
+    void repeatCultivateShowsRemaining() {
+        Player p = newPlayer();
+        service.start(p, null, 120);
+        String result = service.start(p, null, 30);
+        assertTrue(result.contains("剩余约"), result);
+    }
+
+    @Test
+    void methodRequiresRealm() {
+        Player p = newPlayer();
+        String result = service.start(p, CultivationMethod.XUAN_TIAN, 60);
+        assertTrue(result.contains("需金丹期"), result);
     }
 }

@@ -71,17 +71,19 @@ public class BotService {
                 config.appId(), router.prefix(), config.requireAt());
     }
 
-    /** 修炼结算/到期提醒推送到任务所在群。 */
-    private void pushCultivationMessage(CultivationTask task, String message) {
+    /** 修炼结算/到期提醒推送到任务所在群,返回是否推送成功(失败时由修炼系统自动结算)。 */
+    private boolean pushCultivationMessage(CultivationTask task, String message) {
         Group group = task.groupId() == null ? null : knownGroups.get(task.groupId());
         if (group == null) {
-            log.info("[推送降级为日志] {}: {}", task.userId(), message);
-            return;
+            log.info("[推送不可用,将自动结算] {}: {}", task.userId(), message);
+            return false;
         }
         try {
             group.send(message);
+            return true;
         } catch (Exception e) {
             log.error("推送修炼消息到群 {} 失败", task.groupId(), e);
+            return false;
         }
     }
 
