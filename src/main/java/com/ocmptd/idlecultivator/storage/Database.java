@@ -31,8 +31,10 @@ public class Database implements AutoCloseable {
                         inventory TEXT NOT NULL DEFAULT '',
                         cultivation_direction TEXT,
                         active_streak INTEGER NOT NULL DEFAULT 0,
+                        name_changed_at INTEGER NOT NULL DEFAULT 0,
                         created_at INTEGER NOT NULL
                     )""");
+            migrate(st);
             st.executeUpdate("""
                     CREATE TABLE IF NOT EXISTS cultivation_tasks (
                         task_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,6 +55,15 @@ public class Database implements AutoCloseable {
                         cultivation_bonus REAL NOT NULL DEFAULT 1.0,
                         next_bonus_time INTEGER
                     )""");
+        }
+    }
+
+    /** 对已存在的旧库补充新列。 */
+    private void migrate(Statement st) {
+        try {
+            st.executeUpdate("ALTER TABLE users ADD COLUMN name_changed_at INTEGER NOT NULL DEFAULT 0");
+        } catch (SQLException ignored) {
+            // 列已存在
         }
     }
 

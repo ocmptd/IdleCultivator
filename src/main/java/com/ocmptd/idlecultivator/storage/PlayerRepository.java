@@ -36,6 +36,7 @@ public class PlayerRepository {
                 String dir = rs.getString("cultivation_direction");
                 p.setDirection(dir == null ? null : CultivationDirection.fromLabel(dir));
                 p.setActiveStreak(rs.getInt("active_streak"));
+                p.setNameChangedAt(rs.getLong("name_changed_at"));
                 p.setCreatedAt(rs.getLong("created_at"));
                 return Optional.of(p);
             }
@@ -47,13 +48,14 @@ public class PlayerRepository {
     public void save(Player p) {
         try (PreparedStatement ps = conn.prepareStatement("""
                 INSERT INTO users (user_id, group_id, name, gender, level, current_exp, spirit_stones,
-                                   equipment, inventory, cultivation_direction, active_streak, created_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                                   equipment, inventory, cultivation_direction, active_streak, name_changed_at, created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     group_id=excluded.group_id, name=excluded.name, gender=excluded.gender,
                     level=excluded.level, current_exp=excluded.current_exp, spirit_stones=excluded.spirit_stones,
                     equipment=excluded.equipment, inventory=excluded.inventory,
-                    cultivation_direction=excluded.cultivation_direction, active_streak=excluded.active_streak
+                    cultivation_direction=excluded.cultivation_direction, active_streak=excluded.active_streak,
+                    name_changed_at=excluded.name_changed_at
                 """)) {
             ps.setString(1, p.userId());
             ps.setString(2, p.groupId());
@@ -66,7 +68,8 @@ public class PlayerRepository {
             ps.setString(9, p.inventory());
             ps.setString(10, p.direction() == null ? null : p.direction().label());
             ps.setInt(11, p.activeStreak());
-            ps.setLong(12, p.createdAt());
+            ps.setLong(12, p.nameChangedAt());
+            ps.setLong(13, p.createdAt());
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new IllegalStateException("保存玩家失败", e);
