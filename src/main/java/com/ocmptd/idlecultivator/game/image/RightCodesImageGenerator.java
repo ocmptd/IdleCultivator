@@ -31,7 +31,7 @@ public class RightCodesImageGenerator implements ImageCacheService.ImageGenerato
     private static final Logger log = LoggerFactory.getLogger(RightCodesImageGenerator.class);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration POLL_INTERVAL = Duration.ofSeconds(10);
-    private static final Duration TOTAL_TIMEOUT = Duration.ofSeconds(120);
+    private static final Duration TOTAL_TIMEOUT = Duration.ofSeconds(240);
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final Gson gson = new Gson();
