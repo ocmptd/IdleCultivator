@@ -38,7 +38,7 @@ public class BotConfig {
         this.imageApiSize = props.getProperty("image.api.size", "1:1").trim();
         this.imageApiImageSize = props.getProperty("image.api.image-size", "1K").trim();
         this.imageApiPromptPrefix = props.getProperty("image.api.prompt-prefix",
-                "游戏素材,添加 Idle Cultivator 指尖修仙 左上角水印,").trim();
+                "Idle Cultivator 指尖修仙 左上角水印.游戏素材,不要有其他无关元素").trim();
         this.commandPrefix = props.getProperty("command.prefix", "!").trim();
         this.requireAt = Boolean.parseBoolean(props.getProperty("command.require-at", "false").trim());
     }
