@@ -74,6 +74,45 @@ class CommandRouterTest {
     }
 
     @Test
+    void inlineArgsCommandSplitsWithoutSpace() {
+        CommandRouter router = new CommandRouter("");
+        router.register(new Command() {
+            @Override
+            public String name() {
+                return "换发型";
+            }
+
+            @Override
+            public String usage() {
+                return "换发型 [名称]";
+            }
+
+            @Override
+            public boolean inlineArgs() {
+                return true;
+            }
+
+            @Override
+            public String execute(CommandContext ctx) {
+                return String.join(",", ctx.args());
+            }
+        });
+        // 无空格粘连:换发型默认 -> 换发型 + 默认
+        assertEquals("默认", router.handle("u", "g", "换发型默认"));
+        // 带空格仍正常
+        assertEquals("素髻", router.handle("u", "g", "换发型 素髻"));
+        // 无参数
+        assertEquals("", router.handle("u", "g", "换发型"));
+    }
+
+    @Test
+    void nonInlineCommandDoesNotPrefixMatch() {
+        // 默认不开启 inlineArgs 的指令不会被前缀匹配,普通聊天不误触发
+        CommandRouter router = routerWithEcho("");
+        assertNull(router.handle("u", "g", "回声不错啊"));
+    }
+
+    @Test
     void commandReplyExposesAttachedImages() {
         Path image = Path.of("image-cache/portrait.png");
         CommandRouter router = new CommandRouter("!");

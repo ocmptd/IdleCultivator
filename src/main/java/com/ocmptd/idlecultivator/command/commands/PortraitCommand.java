@@ -27,12 +27,12 @@ public class PortraitCommand implements Command {
 
     @Override
     public String name() {
-        return "形象描述";
+        return "展示形象";
     }
 
     @Override
     public String usage() {
-        return "形象描述 [道具] —— 查看角色(或背包道具)的图片描述词";
+        return "展示形象 [道具] —— 查看角色(或背包道具)的图片描述词";
     }
 
     @Override

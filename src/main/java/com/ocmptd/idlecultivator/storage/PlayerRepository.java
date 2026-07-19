@@ -40,6 +40,11 @@ public class PlayerRepository {
                 p.setLevel(rs.getInt("char_level"));
                 p.setSeason(rs.getInt("season"));
                 p.setCreatedAt(rs.getLong("created_at"));
+                try { p.setLastActiveTime(rs.getLong("last_active_time")); } catch (SQLException ignored) {}
+                try { p.setHairstyle(rs.getString("hairstyle")); } catch (SQLException ignored) {}
+                try { p.setOutfit(rs.getString("outfit")); } catch (SQLException ignored) {}
+                try { p.setAccessory(rs.getString("accessory")); } catch (SQLException ignored) {}
+                try { p.setOverflowProtected(rs.getInt("overflow_protected") != 0); } catch (SQLException ignored) {}
                 return Optional.of(p);
             }
         } catch (SQLException e) {
@@ -51,14 +56,18 @@ public class PlayerRepository {
         try (PreparedStatement ps = conn.prepareStatement("""
                 INSERT INTO users (user_id, group_id, name, gender, level, current_exp, spirit_stones,
                                    equipment, inventory, cultivation_direction, active_streak, name_changed_at,
-                                   char_level, season, created_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                                   char_level, season, created_at, last_active_time,
+                                   hairstyle, outfit, accessory, overflow_protected)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     group_id=excluded.group_id, name=excluded.name, gender=excluded.gender,
                     level=excluded.level, current_exp=excluded.current_exp, spirit_stones=excluded.spirit_stones,
                     equipment=excluded.equipment, inventory=excluded.inventory,
                     cultivation_direction=excluded.cultivation_direction, active_streak=excluded.active_streak,
-                    name_changed_at=excluded.name_changed_at, char_level=excluded.char_level, season=excluded.season
+                    name_changed_at=excluded.name_changed_at, char_level=excluded.char_level, season=excluded.season,
+                    last_active_time=excluded.last_active_time,
+                    hairstyle=excluded.hairstyle, outfit=excluded.outfit, accessory=excluded.accessory,
+                    overflow_protected=excluded.overflow_protected
                 """)) {
             ps.setString(1, p.userId());
             ps.setString(2, p.groupId());
@@ -75,6 +84,11 @@ public class PlayerRepository {
             ps.setInt(13, p.level());
             ps.setInt(14, p.season());
             ps.setLong(15, p.createdAt());
+            ps.setLong(16, p.lastActiveTime());
+            ps.setString(17, p.hairstyle());
+            ps.setString(18, p.outfit());
+            ps.setString(19, p.accessory());
+            ps.setInt(20, p.overflowProtected() ? 1 : 0);
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new IllegalStateException("保存玩家失败", e);

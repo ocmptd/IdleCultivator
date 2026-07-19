@@ -19,6 +19,13 @@ public class Player {
     private int activeStreak;
     private long nameChangedAt;
     private long createdAt;
+    private long lastActiveTime;
+    // Phase 2: 形象定制
+    private String hairstyle;
+    private String outfit;
+    private String accessory;
+    // Phase 2: 溢出保护符标记
+    private boolean overflowProtected;
 
     public Player(String userId) {
         this.userId = userId;
@@ -146,5 +153,45 @@ public class Player {
 
     public void setCreatedAt(long createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public long lastActiveTime() {
+        return lastActiveTime;
+    }
+
+    public void setLastActiveTime(long lastActiveTime) {
+        this.lastActiveTime = lastActiveTime;
+    }
+
+    public String hairstyle() {
+        return hairstyle;
+    }
+
+    public void setHairstyle(String hairstyle) {
+        this.hairstyle = hairstyle;
+    }
+
+    public String outfit() {
+        return outfit;
+    }
+
+    public void setOutfit(String outfit) {
+        this.outfit = outfit;
+    }
+
+    public String accessory() {
+        return accessory;
+    }
+
+    public void setAccessory(String accessory) {
+        this.accessory = accessory;
+    }
+
+    public boolean overflowProtected() {
+        return overflowProtected;
+    }
+
+    public void setOverflowProtected(boolean overflowProtected) {
+        this.overflowProtected = overflowProtected;
     }
 }

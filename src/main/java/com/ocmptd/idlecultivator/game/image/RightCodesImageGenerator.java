@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Optional;
 
@@ -42,6 +43,9 @@ public class RightCodesImageGenerator implements ImageCacheService.ImageGenerato
     private final String imageSize;
     private final String promptPrefix;
     private final Path cacheDir;
+    private final Path referenceImage;
+    /** 参考图 base64 data URI 缓存;"" 表示不可用(缺失或读取失败),null 表示尚未加载 */
+    private volatile String referenceDataUri;
 
     public RightCodesImageGenerator(BotConfig config, Path cacheDir) {
         this.baseUrl = config.imageApiUrl().replaceAll("/+$", "");
@@ -51,6 +55,8 @@ public class RightCodesImageGenerator implements ImageCacheService.ImageGenerato
         this.imageSize = config.imageApiImageSize();
         this.promptPrefix = config.imageApiPromptPrefix();
         this.cacheDir = cacheDir.toAbsolutePath().normalize();
+        this.referenceImage = config.imageApiReference().isBlank()
+                ? null : Path.of(config.imageApiReference()).toAbsolutePath().normalize();
     }
 
     @Override
@@ -79,6 +85,13 @@ public class RightCodesImageGenerator implements ImageCacheService.ImageGenerato
         body.addProperty("size", size);
         body.addProperty("imageSize", imageSize);
         body.addProperty("async", true);
+        // 附带参考图(左男右女的光头基础头像),供模型以对应性别面容为基础生成
+        String reference = referenceDataUri();
+        if (reference != null) {
+            JsonArray images = new JsonArray();
+            images.add(reference);
+            body.add("image", images);
+        }
 
         HttpRequest request = requestBuilder(baseUrl + "/draw/v1/images/generations")
                 .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(body), StandardCharsets.UTF_8))
@@ -141,6 +154,30 @@ public class RightCodesImageGenerator implements ImageCacheService.ImageGenerato
         Path imagePath = cacheDir.resolve(sha256Prefix(prompt) + ".png").toAbsolutePath();
         Files.write(imagePath, response.body());
         return imagePath;
+    }
+
+    /**
+     * 读取参考图并编码为 base64 data URI,结果缓存复用。
+     * 参考图缺失或读取失败时返回 null(不影响正常生图)。
+     */
+    private String referenceDataUri() {
+        String cached = referenceDataUri;
+        if (cached != null) return cached.isEmpty() ? null : cached;
+        if (referenceImage == null) {
+            referenceDataUri = "";
+            return null;
+        }
+        try {
+            byte[] bytes = Files.readAllBytes(referenceImage);
+            String uri = "data:image/png;base64," + Base64.getEncoder().encodeToString(bytes);
+            referenceDataUri = uri;
+            log.info("已加载生图参考图(左男右女): {}", referenceImage);
+            return uri;
+        } catch (IOException e) {
+            log.warn("读取生图参考图失败,将不使用参考图: {}", referenceImage, e);
+            referenceDataUri = "";
+            return null;
+        }
     }
 
     private HttpRequest.Builder requestBuilder(String url) {

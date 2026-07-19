@@ -10,6 +10,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 class BotServiceTest {
 
     @Test
@@ -40,5 +42,41 @@ class BotServiceTest {
         MessageChain plain = new MessageChain();
         plain.append(new PlainText("!状态"));
         assertFalse(BotService.containsAt(plain));
+    }
+
+    @Test
+    void extractsMentionedUserIdsFromText() {
+        MessageChain chain = new MessageChain();
+        chain.append(new PlainText("<@ABC123> !互助"));
+        List<String> ids = BotService.extractMentionedUserIds(chain);
+        assertEquals(1, ids.size());
+        assertEquals("ABC123", ids.get(0));
+    }
+
+    @Test
+    void extractsMultipleMentionedUserIds() {
+        MessageChain chain = new MessageChain();
+        chain.append(new PlainText("<@AAA> <@BBB> !道侣"));
+        List<String> ids = BotService.extractMentionedUserIds(chain);
+        assertEquals(2, ids.size());
+        assertEquals("AAA", ids.get(0));
+        assertEquals("BBB", ids.get(1));
+    }
+
+    @Test
+    void extractsMentionedUserIdsFromQqbotFormat() {
+        MessageChain chain = new MessageChain();
+        chain.append(new PlainText("<qqbot-at-user id=\"XYZ789\" /> !互助"));
+        List<String> ids = BotService.extractMentionedUserIds(chain);
+        assertEquals(1, ids.size());
+        assertEquals("XYZ789", ids.get(0));
+    }
+
+    @Test
+    void noMentionedUserIdsReturnsEmpty() {
+        MessageChain chain = new MessageChain();
+        chain.append(new PlainText("!状态"));
+        List<String> ids = BotService.extractMentionedUserIds(chain);
+        assertTrue(ids.isEmpty());
     }
 }

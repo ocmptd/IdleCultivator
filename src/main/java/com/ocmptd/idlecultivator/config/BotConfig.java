@@ -22,6 +22,7 @@ public class BotConfig {
     private final String imageApiSize;
     private final String imageApiImageSize;
     private final String imageApiPromptPrefix;
+    private final String imageApiReference;
     private final String commandPrefix;
     private final boolean requireAt;
 
@@ -39,6 +40,8 @@ public class BotConfig {
         this.imageApiImageSize = props.getProperty("image.api.image-size", "1K").trim();
         this.imageApiPromptPrefix = props.getProperty("image.api.prompt-prefix",
                 "Idle Cultivator 指尖修仙 左上角水印.游戏素材,不要有其他无关元素").trim();
+        // 生图参考图(基础素材):左男右女的光头头像,作为人物五官面容的基础
+        this.imageApiReference = props.getProperty("image.api.reference", "amaterial/base.png").trim();
         this.commandPrefix = props.getProperty("command.prefix", "!").trim();
         this.requireAt = Boolean.parseBoolean(props.getProperty("command.require-at", "false").trim());
     }
@@ -103,6 +106,11 @@ public class BotConfig {
 
     public String imageApiPromptPrefix() {
         return imageApiPromptPrefix;
+    }
+
+    /** 生图参考图(基础素材)路径,左男右女的光头头像;为空则不使用参考图 */
+    public String imageApiReference() {
+        return imageApiReference;
     }
 
     /** 指令前缀,可为空字符串(无前缀) */

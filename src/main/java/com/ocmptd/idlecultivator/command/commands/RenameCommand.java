@@ -31,6 +31,11 @@ public class RenameCommand implements Command {
     }
 
     @Override
+    public boolean inlineArgs() {
+        return true;
+    }
+
+    @Override
     public String execute(CommandContext ctx) {
         Optional<Player> opt = playerService.find(ctx.userId());
         if (opt.isEmpty()) return "道友尚未创建角色,请先 " + ctx.prefix() + "创建角色";

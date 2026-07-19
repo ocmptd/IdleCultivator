@@ -20,6 +20,14 @@ public record Attributes(long hp, long attack, long defense, long sense) {
         } else if (p.gender() == Gender.FEMALE) {
             sense = Math.round(sense * 1.05);
         }
+        // 修炼方向加成
+        if (p.direction() != null) {
+            switch (p.direction()) {
+                case SWORD -> attack = Math.round(attack * 1.15);
+                case MAGIC -> sense = Math.round(sense * 1.15);
+                case MEDICINE -> hp = Math.round(hp * 1.10);
+            }
+        }
         return new Attributes(hp, attack, defense, sense);
     }
 

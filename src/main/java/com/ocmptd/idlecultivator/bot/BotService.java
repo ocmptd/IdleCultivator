@@ -5,6 +5,11 @@ import com.ocmptd.idlecultivator.command.CommandReply;
 import com.ocmptd.idlecultivator.config.BotConfig;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationTask;
+import com.ocmptd.idlecultivator.game.social.Beast;
+import com.ocmptd.idlecultivator.game.social.BeastService;
+import com.ocmptd.idlecultivator.game.social.GroupService;
+import com.ocmptd.idlecultivator.game.social.GroupStatus;
+import com.ocmptd.idlecultivator.game.social.SocialService;
 import com.ocmptd.idlecultivator.storage.NoticeRepository;
 import io.github.kloping.qqbot.Starter;
 import io.github.kloping.qqbot.api.Intents;
@@ -24,9 +29,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -41,16 +48,23 @@ public class BotService {
     private final CommandRouter router;
     private final CultivationService cultivationService;
     private final NoticeRepository noticeRepository;
+    private final GroupService groupService;
+    private final SocialService socialService;
+    private final BeastService beastService;
     /** 群 openid → 最近一次消息的 Group,用于修炼结算主动推送 */
     private final Map<String, Group> knownGroups = new ConcurrentHashMap<>();
     private Starter starter;
 
     public BotService(BotConfig config, CommandRouter router, CultivationService cultivationService,
-                      NoticeRepository noticeRepository) {
+                      NoticeRepository noticeRepository, GroupService groupService,
+                      SocialService socialService, BeastService beastService) {
         this.config = config;
         this.router = router;
         this.cultivationService = cultivationService;
         this.noticeRepository = noticeRepository;
+        this.groupService = groupService;
+        this.socialService = socialService;
+        this.beastService = beastService;
     }
 
     public void start() {
@@ -61,12 +75,22 @@ public class BotService {
         starter.registerListenerHost(new ListenerHost() {
             @EventReceiver
             public void onGroupMessage(GroupMessageEvent event) {
-                knownGroups.put(event.getSubject().getOpenid(), event.getSubject());
+                String groupId = event.getSubject().getOpenid();
+                String userId = event.getSender().getOpenid();
+                knownGroups.put(groupId, event.getSubject());
+                // 记录群消息(活跃度统计)
+                groupService.recordMessage(groupId);
+                // 更新玩家活跃时间(社交惩罚)
+                socialService.updateActivity(userId);
+                // 尝试生成异兽
+                GroupStatus gs = groupService.getGroupStatus(groupId);
+                beastService.trySpawn(groupId, gs.activityLevel()).ifPresent(beast ->
+                        notifyBeastSpawn(groupId, beast));
                 if (config.requireAt() && !containsAt(event.getMessage())) return;
                 String content = extractText(event.getMessage());
+                List<String> mentionedIds = extractMentionedUserIds(event.getMessage());
                 CommandReply commandReply =
-                        router.handleWithReply(event.getSender().getOpenid(),
-                                event.getSubject().getOpenid(), content);
+                        router.handleWithReply(userId, groupId, content, mentionedIds);
                 String reply = commandReply == null ? null : commandReply.text();
                 reply = withPendingNotices(event.getSender().getOpenid(), reply);
                 List<Path> images = commandReply == null ? List.of() : commandReply.images();
@@ -80,6 +104,7 @@ public class BotService {
             @EventReceiver
             public void onFriendMessage(FriendMessageEvent event) {
                 String content = extractText(event.getMessage());
+                socialService.updateActivity(event.getSender().getOpenid());
                 CommandReply commandReply =
                         router.handleWithReply(event.getSender().getOpenid(), null, content);
                 String reply = commandReply == null ? null : commandReply.text();
@@ -90,6 +115,10 @@ public class BotService {
             }
         });
         cultivationService.setNotifier(this::pushCultivationMessage);
+        beastService.setSpawnNotifier((gid, beast) -> {
+            notifyBeastSpawn(gid, beast);
+            return true;
+        });
         log.info("QQ 机器人已启动 (appid={}, 指令前缀=\"{}\", 仅@触发={})",
                 config.appId(), router.prefix(), config.requireAt());
     }
@@ -106,10 +135,11 @@ public class BotService {
     }
 
     private MessageChain groupReply(String userId, String text, List<Path> images) {
-        MessageChain chain = new MessageChain().at(userId);
+        MessageChain chain = new MessageChain();
         if (text != null && !text.isEmpty()) chain.text("\n" + text);
         appendImages(chain, images);
-        return chain.size() == 1 ? null : chain;
+        // 不再附带 @ 发送者:仅当既无文本也无图片时才跳过发送(空消息)
+        return chain.isEmpty() ? null : chain;
     }
 
     private MessageChain friendReply(String text, List<Path> images) {
@@ -147,6 +177,18 @@ public class BotService {
         }
     }
 
+    /** 异兽生成通知推送到群。 */
+    private void notifyBeastSpawn(String groupId, Beast beast) {
+        Group group = knownGroups.get(groupId);
+        if (group == null) return;
+        try {
+            group.send("异兽入侵!" + beast.name() + " 出现在本群(HP:" + beast.hp() + ")\n"
+                    + "输入 !击杀 攻击异兽,击杀者可获得修为与灵石奖励!");
+        } catch (Exception e) {
+            log.error("推送异兽入侵通知到群 {} 失败", groupId, e);
+        }
+    }
+
     /**
      * 从消息链提取纯文本(拼接 PlainText 片段并去除 at 标记)。
      * 注意:MessageChain.toString() 返回 List.toString() 形式(带 [] 包裹),不可直接用于指令解析。
@@ -170,5 +212,21 @@ public class BotService {
             if (element instanceof PlainText text) sb.append(text.getText());
         }
         return AT_TAG.matcher(sb).find();
+    }
+
+    /** 从消息链提取 @ 提及的用户 ID 列表。 */
+    public static List<String> extractMentionedUserIds(MessageChain chain) {
+        List<String> ids = new ArrayList<>();
+        if (chain == null) return ids;
+        StringBuilder sb = new StringBuilder();
+        for (SendAble element : chain) {
+            if (element instanceof PlainText text) sb.append(text.getText());
+        }
+        String text = sb.toString();
+        Matcher m = Pattern.compile("<@!?([0-9A-Za-z_-]+)>").matcher(text);
+        while (m.find()) ids.add(m.group(1));
+        m = Pattern.compile("<qqbot-at-user\\s+id=\"([^\"]*)\"\\s*/>").matcher(text);
+        while (m.find()) ids.add(m.group(1));
+        return ids;
     }
 }

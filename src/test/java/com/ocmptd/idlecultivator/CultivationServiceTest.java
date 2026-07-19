@@ -2,7 +2,6 @@ package com.ocmptd.idlecultivator;
 
 import com.ocmptd.idlecultivator.game.cultivation.CultivationMethod;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
-import com.ocmptd.idlecultivator.game.cultivation.CultivationTask;
 import com.ocmptd.idlecultivator.game.item.Inventory;
 import com.ocmptd.idlecultivator.game.player.Gender;
 import com.ocmptd.idlecultivator.game.player.Player;
@@ -19,6 +18,7 @@ import java.sql.PreparedStatement;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -83,11 +83,12 @@ class CultivationServiceTest {
     }
 
     @Test
-    void longCultivationNeedsHarvest() throws Exception {
+    void longCultivationAutoSettlesWithPush() throws Exception {
         Player p = newPlayer();
         String start = service.start(p, CultivationMethod.TU_NA, 120);
         assertTrue(start.contains("+400 修为"), start); // 120 × 2 × 100/60 = 400
-        backdateTask(activeTaskId(), 120 * 60_000L + 30_000L); // 超时不足 1 分钟,无溢出
+        assertTrue(start.contains("完成后自动收获"), start);
+        backdateTask(activeTaskId(), 121 * 60_000L); // 到期
 
         AtomicReference<String> pushed = new AtomicReference<>();
         service.setNotifier((task, msg) -> {
@@ -95,11 +96,7 @@ class CultivationServiceTest {
             return true;
         });
         service.settleFinishedTasks();
-        assertTrue(pushed.get().contains("可以收获"), pushed.get());
-        assertEquals(CultivationTask.STATUS_READY, service.activeTask("u1").orElseThrow().status());
-
-        String result = service.harvest(playerService.find("u1").orElseThrow());
-        assertTrue(result.contains("+400 修为"), result);
+        assertTrue(pushed.get().contains("+400 修为"), pushed.get());
         // 400 修为自动升级:110+120+130=360,剩余 40
         assertEquals(4, playerService.find("u1").orElseThrow().level());
         assertEquals(40, playerService.find("u1").orElseThrow().exp());
@@ -108,16 +105,17 @@ class CultivationServiceTest {
     }
 
     @Test
-    void lightOverflowConvertsToDust() throws Exception {
+    void overtimeHarvestStillFullRewardNoPenalty() throws Exception {
         Player p = newPlayer();
         service.start(p, null, 120); // 2h → +400 修为
-        backdateTask(activeTaskId(), (120 + 30) * 60_000L); // 超时 30 分钟
+        backdateTask(activeTaskId(), (120 + 90) * 60_000L); // 超时 90 分钟,仍全额无惩罚
 
         String result = service.harvest(playerService.find("u1").orElseThrow());
-        assertTrue(result.contains("灵尘"), result);
+        assertTrue(result.contains("+400 修为"), result);
         Player reloaded = playerService.find("u1").orElseThrow();
-        assertTrue(result.contains("+350 修为"), result); // 溢出 30/60×100=50 折损
-        assertTrue(Inventory.parse(reloaded.inventory()).containsKey("灵尘"));
+        assertEquals(200, reloaded.spiritStones());
+        assertFalse(Inventory.parse(reloaded.inventory()).containsKey("灵尘"));
+        assertTrue(service.activeTask("u1").isEmpty());
     }
 
     @Test

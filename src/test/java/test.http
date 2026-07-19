@@ -1,0 +1,58 @@
+给你示例:
+
+###
+#{
+#    "model": "nano-banana-fast",
+#    "prompt": "参考这张图，把主体改成赛博朋克风格",
+#    "n": 1,
+#    "size": "16:9",
+#    "async": true,
+#    "image": [
+#      "data:image/png;base64,{BASE64_IMAGE}"
+#    ]
+#  }
+#返回如: {
+#  "task_id": "task_c77c15a83cb041f192cfcbff65a0e3d3",
+#"status": "processing",
+#"progress": 0,
+#"message": "任务id: task_c77c15a83cb041f192cfcbff65a0e3d3，任务还在处理中，请稍后到异步任务中查看结果"
+#}
+POST https://www.right.codes/draw/v1/images/generations
+Authorization: Bearer sk-c3bdbb038f934069b0856eb0a73c033c
+Content-Type: application/json
+
+{
+  "model": "gpt-image-2",
+  "prompt": "游戏素材,男黑发束起,身着麻衣布鞋,手持一柄普通的木剑",
+  "n": 1,
+  "size": "1:1",
+  "imageSize": "1K",
+  "async": true
+}
+
+###
+#响应如:
+#{
+#  "id": "task_c77c15a83cb041f192cfcbff65a0e3d3",
+#  "task_id": "task_c77c15a83cb041f192cfcbff65a0e3d3",
+#  "object": "image",
+#  "model": "gpt-image-2",
+#  "status": "in_progress",
+#  "progress": 2,
+#  "created_at": 1784302438
+#}
+# 或
+#{
+#  "created": 1784302540,
+#  "data": [
+#    {
+#      "url": "https://file4.aitohumanize.com/file/43c5dfd51bf547c093b5eba8484825ba.png"
+#    }
+#  ]
+#}
+GET https://www.right.codes/v1/tasks/task_c77c15a83cb041f192cfcbff65a0e3d3
+Authorization: Bearer sk-c3bdbb038f934069b0856eb0a73c033c
+
+###
+
+生成的提示词之前加: 游戏素材,添加 Idle Cultivator 指尖修仙 左上角水印,{原提示词}

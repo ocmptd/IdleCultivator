@@ -1,6 +1,5 @@
 package com.ocmptd.idlecultivator.game.cultivation;
 
-import com.ocmptd.idlecultivator.game.item.Inventory;
 import com.ocmptd.idlecultivator.game.player.LevelTable;
 import com.ocmptd.idlecultivator.game.player.Player;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
@@ -18,9 +17,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * 修炼系统(最长 2 小时,时长越长修为/灵石越多且每小时效率越高):
  * - 修为 = 分钟数 × (1 + 分钟数/120) × (100/60) × 功法倍率 × 境界压制;灵石 = 修为÷2
  *   (约 30m→62 / 1h→150 / 2h→400;日均约 5 次 2h 修炼 ≈ 2000 修为,契合等级节奏设计)
- * - 快速修炼(≤30 分钟):到期自动结算并推送,默认时长 18~28 分钟随机
- * - 长时修炼(30 分钟 ~ 2 小时):到期后需收获(推送失败时自动结算);
- *   超时溢出部分按分级惩罚转化:≤1h → 灵尘(×0.3);1-3h → 残破法宝(×0.5);>3h → 灵石(×0.7)且 20% 概率走火入魔
+ * - 到期自动结算并推送全额收益(无超时惩罚),默认时长 18~28 分钟随机;推送失败时暂存通知,下次发消息补送
  * - 提前收获:修炼满 10 分钟后可提前结束,收益 = 预期 × 进度 × (0.5 + 0.5×进度),越接近完成衰减越小
  */
 public class CultivationService {
@@ -32,14 +29,23 @@ public class CultivationService {
         boolean push(CultivationTask task, String message);
     }
 
+    /** 社交效率倍率提供者(群活跃/互助/潮汐/惩罚等综合倍率) */
+    @FunctionalInterface
+    public interface SocialMultiplierProvider {
+        double multiplier(String userId, String groupId);
+    }
+
+    /** 修为获得回调(用于宗门战统计) */
+    @FunctionalInterface
+    public interface ExpGainNotifier {
+        void onExpGain(String userId, String groupId, long exp);
+    }
+
     public static final int DEFAULT_MINUTES = 30;
     public static final int MAX_MINUTES = 120;
     public static final int MIN_HARVEST_MINUTES = 10;
     /** 每小时基础修为(另有时长加成:×(1 + 分钟数/120)) */
     public static final double BASE_EXP_PER_HOUR = 100;
-    public static final String ITEM_DUST = "灵尘";
-    public static final String ITEM_BROKEN_ARTIFACT = "残破法宝";
-    public static final double MADNESS_PROBABILITY = 0.2;
 
     private final CultivationTaskRepository taskRepository;
     private final PlayerService playerService;
@@ -49,6 +55,10 @@ public class CultivationService {
         log.info("[推送] {}: {}", t.userId(), msg);
         return false;
     };
+    @Setter
+    private volatile SocialMultiplierProvider socialMultiplierProvider = (uid, gid) -> 1.0;
+    @Setter
+    private volatile ExpGainNotifier expGainNotifier = (uid, gid, exp) -> {};
 
     public CultivationService(CultivationTaskRepository taskRepository, PlayerService playerService,
                               NoticeRepository noticeRepository) {
@@ -67,12 +77,23 @@ public class CultivationService {
     }
 
     /**
-     * 开始修炼。
+     * 开始修炼(社交倍率默认 1.0,向后兼容)。
      *
      * @param method  功法,null 表示默认吐纳诀
      * @param minutes 修炼时长(分钟),≤0 表示默认 18~28 分钟随机
      */
     public String start(Player player, CultivationMethod method, int minutes) {
+        return start(player, method, minutes, 1.0);
+    }
+
+    /**
+     * 开始修炼。
+     *
+     * @param method          功法,null 表示默认吐纳诀
+     * @param minutes         修炼时长(分钟),≤0 表示默认 18~28 分钟随机
+     * @param socialMultiplier 社交效率倍率(群活跃/互助/潮汐/惩罚等综合)
+     */
+    public String start(Player player, CultivationMethod method, int minutes, double socialMultiplier) {
         Optional<CultivationTask> active = taskRepository.findActiveByUser(player.userId());
         if (active.isPresent()) {
             CultivationTask t = active.get();
@@ -86,13 +107,20 @@ public class CultivationService {
         if (player.realm().ordinal() < method.requiredRealm().ordinal()) {
             return "《" + method.label() + "》需" + method.requiredRealm().label() + "及以上方可修炼。";
         }
+        // 性别×方向联动功法检查
+        if (method.genderReq() != null && player.gender() != method.genderReq()) {
+            return "《" + method.label() + "》需" + method.genderReq().label() + "性修士方可修炼。";
+        }
+        if (method.directionReq() != null && player.direction() != method.directionReq()) {
+            return "《" + method.label() + "》需" + method.directionReq().label() + "方向方可修炼。";
+        }
         if (minutes <= 0) minutes = randomDefaultMinutes();
         if (minutes > MAX_MINUTES) return "单次修炼时长最长 2 小时(时长越长收益越高)。";
-        long reward = expectedReward(minutes, method, player.level());
+        double directionBonus = player.direction() == null ? 1.0 : player.direction().cultivationBonus();
+        long reward = expectedReward(minutes, method, player.level(), socialMultiplier, directionBonus);
         taskRepository.insert(player.userId(), player.groupId(), method.label(), System.currentTimeMillis(), minutes, reward);
-        String tail = isQuick(minutes) ? ",完成后自动收获" : ",完成后请及时收获,超时将有溢出惩罚";
         return "道友开始修炼《" + method.label() + "》,预计 " + formatDuration(minutes) + " 后完成,将获得 +" + reward
-                + " 修为,+" + stonesOf(reward) + " 灵石" + tail;
+                + " 修为,+" + stonesOf(reward) + " 灵石,完成后自动收获";
     }
 
     public static boolean isQuick(int minutes) {
@@ -100,13 +128,32 @@ public class CultivationService {
     }
 
     public long expectedReward(int minutes, CultivationMethod method) {
-        return expectedReward(minutes, method, 1);
+        return expectedReward(minutes, method, 1, 1.0);
     }
 
-    /** 预期修为 = 分钟数 × (1 + 分钟数/120) × 每分钟基础 × 功法倍率 × 境界压制(元婴期 ×0.8),时长越长效率越高。 */
     public long expectedReward(int minutes, CultivationMethod method, int level) {
-        double multiplier = (method == null ? 1.0 : method.multiplier()) * LevelTable.cultivationMultiplier(level);
+        return expectedReward(minutes, method, level, 1.0);
+    }
+
+    public long expectedReward(int minutes, CultivationMethod method, int level, double socialMultiplier) {
+        return expectedReward(minutes, method, level, socialMultiplier, 1.0);
+    }
+
+    /** 预期修为 = 分钟数 × (1 + 分钟数/120) × 每分钟基础 × 功法倍率 × 境界压制 × 社交倍率 × 方向加成,时长越长效率越高。 */
+    public long expectedReward(int minutes, CultivationMethod method, int level, double socialMultiplier, double directionBonus) {
+        double multiplier = (method == null ? 1.0 : method.multiplier())
+                * LevelTable.cultivationMultiplier(level) * socialMultiplier * directionBonus;
         return Math.round(minutes * (1 + minutes / 120.0) * (BASE_EXP_PER_HOUR / 60) * multiplier);
+    }
+
+    /** 计算社交效率倍率(由外部服务提供)。 */
+    public double socialMultiplier(String userId, String groupId) {
+        return socialMultiplierProvider.multiplier(userId, groupId);
+    }
+
+    /** 通知修为获得(用于宗门战统计)。 */
+    private void notifyExpGain(String userId, String groupId, long exp) {
+        if (exp > 0) expGainNotifier.onExpGain(userId, groupId, exp);
     }
 
     /** 灵石收益 = 修为收益 ÷ 2。 */
@@ -115,30 +162,21 @@ public class CultivationService {
     }
 
     /**
-     * 到期任务处理,由调度器周期调用:快速修炼自动结算;长时修炼标记待收获并提醒一次。
+     * 到期任务处理,由调度器周期调用:到期即自动结算全额收益并推送(无超时惩罚)。
      */
     public void settleFinishedTasks() {
         List<CultivationTask> finished = taskRepository.findFinishedRunning(System.currentTimeMillis());
         for (CultivationTask task : finished) {
             try {
-                if (isQuick(task.durationMinutes())) {
-                    settleQuick(task);
-                } else {
-                    boolean pushed = notifier.push(task, "道友修炼已满 " + formatDuration(task.durationMinutes())
-                            + ",可以收获了!超时将按溢出惩罚转化收益。");
-                    if (pushed) {
-                        taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_READY);
-                    } else {
-                        settleLongOnTime(task);
-                    }
-                }
+                settle(task);
             } catch (Exception e) {
                 log.error("处理修炼任务 {} 失败", task.taskId(), e);
             }
         }
     }
 
-    private void settleQuick(CultivationTask task) {
+    /** 到期自动结算全额收益:推送成功即完成,否则暂存通知待下次发消息补送。 */
+    private void settle(CultivationTask task) {
         Optional<Player> opt = playerService.find(task.userId());
         if (opt.isEmpty()) {
             taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_EXPIRED);
@@ -148,6 +186,7 @@ public class CultivationService {
         long stones = stonesOf(task.expectedReward());
         player.addSpiritStones(stones);
         String levelTip = playerService.gainExp(player, task.expectedReward());
+        notifyExpGain(task.userId(), task.groupId(), task.expectedReward());
         taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
         String message = "道友修炼完成!获得 +" + task.expectedReward() + " 修为,+" + stones
                 + " 灵石," + progressOf(player) + levelTip;
@@ -156,26 +195,8 @@ public class CultivationService {
         }
     }
 
-    /** 无法推送提醒时,长时修炼到期直接自动结算全额收益,避免玩家被溢出惩罚。 */
-    private void settleLongOnTime(CultivationTask task) {
-        Optional<Player> opt = playerService.find(task.userId());
-        if (opt.isEmpty()) {
-            taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_EXPIRED);
-            return;
-        }
-        Player player = opt.get();
-        long stones = stonesOf(task.expectedReward());
-        player.addSpiritStones(stones);
-        String levelTip = playerService.gainExp(player, task.expectedReward());
-        taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
-        noticeRepository.add(task.userId(), "道友上次修炼已自动结算:+" + task.expectedReward()
-                + " 修为,+" + stones + " 灵石," + progressOf(player) + levelTip);
-        log.info("推送不可用,长时修炼自动结算:user={} +{} 修为 +{} 灵石",
-                task.userId(), task.expectedReward(), stones);
-    }
-
     /**
-     * 收获修炼(!收获):到期后收获全额收益(超时有溢出惩罚);
+     * 收获修炼(!收获):到期已自动结算,一般无需手动收获;即使手动收获也为全额收益(无超时惩罚);
      * 也可提前结束——满 10 分钟后收益 = 预期 × 进度 × (0.5 + 0.5×进度),不足 10 分钟无任何收益。
      */
     public String harvest(Player player) {
@@ -192,54 +213,16 @@ public class CultivationService {
             long gain = Math.round(task.expectedReward() * progress * (0.5 + 0.5 * progress));
             player.addSpiritStones(stonesOf(gain));
             String levelTip = playerService.gainExp(player, gain);
+            notifyExpGain(player.userId(), player.groupId(), gain);
             taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
             return "道友提前结束修炼(进度 " + Math.round(progress * 100) + "%),获得 +" + gain
                     + " 修为,+" + stonesOf(gain) + " 灵石(提前收获有衰减)\n当前" + progressOf(player) + levelTip;
         }
-        if (isQuick(task.durationMinutes())) {
-            settleQuick(task);
-            return "道友修炼完成!收益已自动结算,当前"
-                    + playerService.find(player.userId()).map(CultivationService::progressOf).orElse("");
-        }
-
-        long overtimeMinutes = (now - task.endTime()) / 60_000;
-        long baseExp = task.expectedReward();
-        StringBuilder msg = new StringBuilder();
-        String levelTip;
-        if (overtimeMinutes < 1) {
-            player.addSpiritStones(stonesOf(baseExp));
-            levelTip = playerService.gainExp(player, baseExp);
-            msg.append("道友修炼完成!获得 +").append(baseExp).append(" 修为,+").append(stonesOf(baseExp)).append(" 灵石");
-        } else {
-            long overflowExp = Math.min(baseExp, Math.round(overtimeMinutes / 60.0 * BASE_EXP_PER_HOUR));
-            long gainExp = baseExp - overflowExp;
-            player.addSpiritStones(stonesOf(gainExp));
-            levelTip = playerService.gainExp(player, gainExp);
-            msg.append("道友修炼完成!获得 +").append(gainExp).append(" 修为,+").append(stonesOf(gainExp)).append(" 灵石(超时 ")
-                    .append(formatDuration((int) overtimeMinutes)).append(",溢出部分已转化:");
-            if (overtimeMinutes <= 60) {
-                int dust = (int) Math.max(1, Math.round(overflowExp * 0.3));
-                player.setInventory(Inventory.add(player.inventory(), ITEM_DUST, dust));
-                msg.append(ITEM_DUST).append("×").append(dust).append(")");
-            } else if (overtimeMinutes <= 180) {
-                int artifacts = (int) Math.max(1, Math.round(overflowExp * 0.5 / 50));
-                player.setInventory(Inventory.add(player.inventory(), ITEM_BROKEN_ARTIFACT, artifacts));
-                msg.append(ITEM_BROKEN_ARTIFACT).append("×").append(artifacts).append(")");
-            } else {
-                long stones = Math.max(1, Math.round(overflowExp * 0.7));
-                player.addSpiritStones(stones);
-                msg.append("灵石×").append(stones).append(")");
-                if (ThreadLocalRandom.current().nextDouble() < MADNESS_PROBABILITY) {
-                    long loss = Math.round(player.exp() * 0.1);
-                    player.setExp(Math.max(0, player.exp() - loss));
-                    msg.append("\n不好!道友走火入魔,修为受损 -").append(loss).append("!");
-                }
-            }
-        }
-        playerService.save(player);
-        taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
-        msg.append("\n当前").append(progressOf(player)).append(levelTip);
-        return msg.toString();
+        // 已到期(含超时):全额结算,无超时惩罚,与自动收获一致
+        settle(task);
+        return "道友修炼完成!获得 +" + task.expectedReward() + " 修为,+" + stonesOf(task.expectedReward())
+                + " 灵石,当前"
+                + playerService.find(player.userId()).map(CultivationService::progressOf).orElse("");
     }
 
     /** 当前等级与修为进度描述。 */
@@ -250,6 +233,21 @@ public class CultivationService {
         String suffix = LevelTable.atBreakthrough(player.level()) ? "(需突破)" : "";
         return "Lv." + player.level() + ",修为:" + player.exp() + "/"
                 + LevelTable.expToNextLevel(player.level()) + suffix;
+    }
+
+    /** 加速丹:立即完成当前修炼，获得全额收益（无溢出惩罚）。 */
+    public String speedFinish(Player player) {
+        Optional<CultivationTask> opt = taskRepository.findActiveByUser(player.userId());
+        if (opt.isEmpty()) return "道友当前没有进行中的修炼。";
+        CultivationTask task = opt.get();
+        long baseExp = task.expectedReward();
+        long stones = stonesOf(baseExp);
+        player.addSpiritStones(stones);
+        String levelTip = playerService.gainExp(player, baseExp);
+        notifyExpGain(player.userId(), player.groupId(), baseExp);
+        taskRepository.updateStatus(task.taskId(), CultivationTask.STATUS_DONE);
+        return "道友服下加速丹,修炼瞬间完成!获得 +" + baseExp + " 修为,+" + stones
+                + " 灵石\n当前" + progressOf(player) + levelTip;
     }
 
     public static String formatDuration(int minutes) {

@@ -6,6 +6,8 @@ import com.ocmptd.idlecultivator.game.cultivation.CultivationMethod;
 import com.ocmptd.idlecultivator.game.cultivation.CultivationService;
 import com.ocmptd.idlecultivator.game.player.Player;
 import com.ocmptd.idlecultivator.game.player.PlayerService;
+import com.ocmptd.idlecultivator.game.social.GroupService;
+import com.ocmptd.idlecultivator.game.social.SocialService;
 
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -16,10 +18,15 @@ public class CultivateCommand implements Command {
 
     private final PlayerService playerService;
     private final CultivationService cultivationService;
+    private final GroupService groupService;
+    private final SocialService socialService;
 
-    public CultivateCommand(PlayerService playerService, CultivationService cultivationService) {
+    public CultivateCommand(PlayerService playerService, CultivationService cultivationService,
+                           GroupService groupService, SocialService socialService) {
         this.playerService = playerService;
         this.cultivationService = cultivationService;
+        this.groupService = groupService;
+        this.socialService = socialService;
     }
 
     @Override
@@ -30,6 +37,11 @@ public class CultivateCommand implements Command {
     @Override
     public String usage() {
         return "修炼 [功法名] [时长] —— 开始自动修炼,默认 18~28 分钟随机,最长 2 小时,时长越长收益越高(如:修炼 紫府诀 2h)";
+    }
+
+    @Override
+    public boolean inlineArgs() {
+        return true;
     }
 
     @Override
@@ -50,7 +62,23 @@ public class CultivateCommand implements Command {
                 }
             }
         }
-        return cultivationService.start(opt.get(), method, minutes);
+        // 计算社交效率倍率 = 群活跃度倍率 x 潮汐倍率 x 互助倍率 x 道侣倍率 x 社交惩罚倍率
+        double groupMult = groupService.groupMultiplier(ctx.groupId());
+        double socialMult = socialService.socialMultiplier(ctx.userId());
+        double totalMult = groupMult * socialMult;
+        // 方向修炼加成
+        double directionBonus = opt.get().direction() == null ? 1.0 : opt.get().direction().cultivationBonus();
+        double effectiveMult = totalMult * directionBonus;
+        String result = cultivationService.start(opt.get(), method, minutes, totalMult);
+        // 附加倍率提示
+        if (effectiveMult > 1.0) {
+            int pct = (int) Math.round((effectiveMult - 1.0) * 100);
+            if (pct > 0) result += " (效率+" + pct + "%)";
+        } else if (effectiveMult < 1.0) {
+            int pct = (int) Math.round((1.0 - effectiveMult) * 100);
+            if (pct > 0) result += " (效率-" + pct + "%)";
+        }
+        return result;
     }
 
     private Integer parseMinutes(String arg) {

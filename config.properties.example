@@ -19,6 +19,8 @@ image.api.model=gpt-image-2
 image.api.size=1:1
 image.api.image-size=1K
 image.api.prompt-prefix=Idle Cultivator 指尖修仙 左上角水印.游戏素材,不要有其他无关元素
+# 生图参考图(基础素材):左男右女的光头头像,作为人物五官面容的基础;置空则不使用参考图
+image.api.reference=amaterial/base.png
 
 # 指令前缀,默认 "!";设为空则无前缀(直接输入 修炼/状态 等指令名)
 command.prefix=!

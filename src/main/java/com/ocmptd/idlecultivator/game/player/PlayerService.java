@@ -81,7 +81,11 @@ public class PlayerService {
         }
         sb.append("\n").append(Attributes.of(p).display());
         sb.append("\n灵石:").append(p.spiritStones());
-        if (p.direction() != null) sb.append("\n方向:").append(p.direction().label());
+        if (p.direction() != null) sb.append("\n方向:").append(p.direction().label())
+                .append("(").append(p.direction().bonusDesc()).append(")");
+        if (p.hairstyle() != null) sb.append("\n发型:").append(p.hairstyle());
+        if (p.outfit() != null) sb.append("\n服饰:").append(p.outfit());
+        if (p.accessory() != null) sb.append("\n配饰:").append(p.accessory());
         sb.append("\n装备:").append(p.equipment().isEmpty() ? "无" : p.equipment());
         sb.append("\n背包:").append(Inventory.display(p.inventory()));
         return sb.toString();

@@ -18,15 +18,29 @@ public class PortraitService {
     /** 中文姿容描述正文(不含展示用前缀)。 */
     public String appearancePrompt(Player p) {
         StringBuilder sb = new StringBuilder();
-        sb.append(p.gender() == Gender.FEMALE ? "女,青丝如瀑" : "男,黑发束起");
-        sb.append(",").append(switch (p.realm()) {
-            case LIAN_QI -> "身着麻衣布鞋";
-            case ZHU_JI -> "身着道袍长衫";
-            case JIN_DAN -> "身着道纹法袍";
-            case YUAN_YING -> "仙风道骨,衣袂飘飘";
-            case HUA_SHEN -> "周身灵光隐现";
-            case DA_CHENG -> "气息渊渟岳峙,恍若谪仙";
-        });
+        // 发型：自定义优先
+        if (p.hairstyle() != null && !p.hairstyle().isBlank()) {
+            sb.append(p.gender() == Gender.FEMALE ? "女," : "男,").append(p.hairstyle());
+        } else {
+            sb.append(p.gender() == Gender.FEMALE ? "女,青丝如瀑" : "男,黑发束起");
+        }
+        // 服饰：自定义优先
+        if (p.outfit() != null && !p.outfit().isBlank()) {
+            sb.append(",身着").append(p.outfit());
+        } else {
+            sb.append(",").append(switch (p.realm()) {
+                case LIAN_QI -> "身着麻衣布鞋";
+                case ZHU_JI -> "身着道袍长衫";
+                case JIN_DAN -> "身着道纹法袍";
+                case YUAN_YING -> "仙风道骨,衣袂飘飘";
+                case HUA_SHEN -> "周身灵光隐现";
+                case DA_CHENG -> "气息渊渟岳峙,恍若谪仙";
+            });
+        }
+        // 配饰
+        if (p.accessory() != null && !p.accessory().isBlank()) {
+            sb.append(",佩戴").append(p.accessory());
+        }
         if (p.direction() != null) {
             sb.append(",").append(switch (p.direction()) {
                 case SWORD -> "腰间悬着一柄寒光凛凛的长剑";
@@ -43,16 +57,36 @@ public class PortraitService {
      * 图片描述词(AI 绘图 prompt)。暂不实际生成图片。
      */
     public String imagePrompt(Player p) {
-        StringBuilder sb = new StringBuilder("中国古风修仙人物立绘,");
-        sb.append(p.gender() == Gender.FEMALE ? "女性修士,青丝长发," : "男性修士,黑发束冠,");
-        sb.append(switch (p.realm()) {
-            case LIAN_QI -> "练气期新人,粗布麻衣,";
-            case ZHU_JI -> "筑基期修士,青色道袍,";
-            case JIN_DAN -> "金丹期修士,绣有道纹的法袍,丹田金光,";
-            case YUAN_YING -> "元婴期高人,华贵法衣,身后元婴虚影,";
-            case HUA_SHEN -> "化神期大能,周身灵气环绕,";
-            case DA_CHENG -> "大乘期仙人,脚踏祥云,仙气缭绕,";
-        });
+        StringBuilder sb = new StringBuilder();
+        // 参考图为左男右女的光头基础头像,按性别选取对应一侧的五官面容作为基础
+        sb.append(p.gender() == Gender.FEMALE
+                ? "参考图左男右女,以右侧女性光头头像的五官面容为基础,"
+                : "参考图左男右女,以左侧男性光头头像的五官面容为基础,");
+        sb.append("中国古风修仙人物立绘,");
+        sb.append(p.gender() == Gender.FEMALE ? "女性修士," : "男性修士,");
+        // 发型
+        if (p.hairstyle() != null && !p.hairstyle().isBlank()) {
+            sb.append(p.hairstyle()).append(",");
+        } else {
+            sb.append(p.gender() == Gender.FEMALE ? "青丝长发," : "黑发束冠,");
+        }
+        // 服饰
+        if (p.outfit() != null && !p.outfit().isBlank()) {
+            sb.append(p.outfit()).append(",");
+        } else {
+            sb.append(switch (p.realm()) {
+                case LIAN_QI -> "练气期新人,粗布麻衣,";
+                case ZHU_JI -> "筑基期修士,青色道袍,";
+                case JIN_DAN -> "金丹期修士,绣有道纹的法袍,丹田金光,";
+                case YUAN_YING -> "元婴期高人,华贵法衣,身后元婴虚影,";
+                case HUA_SHEN -> "化神期大能,周身灵气环绕,";
+                case DA_CHENG -> "大乘期仙人,脚踏祥云,仙气缭绕,";
+            });
+        }
+        // 配饰
+        if (p.accessory() != null && !p.accessory().isBlank()) {
+            sb.append("佩戴").append(p.accessory()).append(",");
+        }
         if (p.direction() != null) {
             sb.append(switch (p.direction()) {
                 case SWORD -> "剑修,手持仙剑,剑气纵横,";
